@@ -20,7 +20,7 @@ export default function Home() {
           <path d="m12 19-7-7 7-7"/>
           <path d="M19 12H5"/>
         </svg>
-        <span className="hidden sm:inline">Back to Menu</span>
+        <span className="hidden sm:inline">Back</span>
       </Link>
 
       {/* یک نگهدارنده برای نظم دهی به محتوای اصلی */}
