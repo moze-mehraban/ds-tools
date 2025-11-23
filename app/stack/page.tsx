@@ -2,10 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import StackSimulator from '../components/StackSimulator';
-import QueueSimulator from '../components/QueueSimulator';
-
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'stack' | 'queue'>('stack');
 
   return (
     // تغییر: استفاده از justify-center برای وسط‌چین کردن عمودی
@@ -30,42 +27,12 @@ export default function Home() {
         <h1 className="text-3xl md:text-4xl font-bold text-gray-800 text-center">
           Data Structure Simulator
         </h1>
-
-        {/* دکمه‌های سوئیچ */}
-        <div className="bg-white p-1 rounded-lg shadow-sm border border-gray-200 inline-flex">
-          <button
-            onClick={() => setActiveTab('stack')}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-              activeTab === 'stack'
-                ? 'bg-indigo-500 text-white shadow-md'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            Stack
-          </button>
-          <button
-            onClick={() => setActiveTab('queue')}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-              activeTab === 'queue'
-                ? 'bg-emerald-500 text-white shadow-md'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            Queue
-          </button>
-        </div>
         
         {/* نمایش کارت انتخاب شده */}
         <div className="w-full flex justify-center items-center min-h-[400px]">
-          {activeTab === 'stack' ? (
             <div className="animate-in fade-in zoom-in duration-300 w-full flex justify-center">
               <StackSimulator />
             </div>
-          ) : (
-            <div className="animate-in fade-in zoom-in duration-300 w-full flex justify-center">
-              <QueueSimulator />
-            </div>
-          )}
         </div>
 
       </div>

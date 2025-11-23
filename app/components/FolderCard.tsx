@@ -27,7 +27,7 @@ export default function FolderCard({ name, bg }: Props) {
         transform: hover ? "translateY(-4px)" : "translateY(0)",
         transition: "transform .18s ease, box-shadow .18s ease",
         textDecoration: "none",
-        color: "inherit",
+        color: "black",
       }}
     >
       <div
