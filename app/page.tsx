@@ -67,10 +67,7 @@ export default async function Home() {
             A
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20,color:"black", letterSpacing: "-0.02em" }}>App folders</h1>
-            <p style={{ margin: 0, marginTop: 4, color: "#475569", fontSize: 13 }}>
-              Buttons are created automatically for each folder in /app
-            </p>
+            <h1 style={{ margin: 0, fontSize: 20,color:"black", letterSpacing: "-0.02em" }}>Data structures Simulators</h1>
           </div>
         </header>
 

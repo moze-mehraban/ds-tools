@@ -51,7 +51,6 @@ export default function FolderCard({ name, bg }: Props) {
 
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 15, fontWeight: 600 }}>{name}</div>
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>Open /{name}</div>
       </div>
 
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.6 }} xmlns="http://www.w3.org/2000/svg" aria-hidden>
