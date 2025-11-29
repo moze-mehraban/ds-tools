@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trash2, Plus, RefreshCw, X } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // Added for navigation
+import { Trash2, Plus, RefreshCw, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 
 // --- Types ---
 type NodeId = string;
@@ -27,19 +28,11 @@ const RecursiveTreeNode = ({
   onSelect: (id: NodeId) => void;
 }) => {
   const isSelected = node.id === selectedId;
-
-  // If leaf node (no children), simple render
   const isLeaf = !node.left && !node.right;
 
   return (
     <li className="relative float-left text-center list-none p-4 pt-8">
-      
-      {/* CSS Magic for Connectors: 
-         We use ::before and ::after in the <style> block below 
-         to draw the lines automatically based on the <li> structure.
-      */}
-
-      {/* The Node Circle */}
+      {/* Node Circle */}
       <div 
         onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
         className={`
@@ -57,13 +50,10 @@ const RecursiveTreeNode = ({
       {/* Children Container */}
       {(!isLeaf) && (
         <ul className="flex justify-center pt-4 relative">
-          
           {/* Left Child Slot */}
           {node.left ? (
             <RecursiveTreeNode node={node.left} selectedId={selectedId} onSelect={onSelect} />
           ) : (
-             // If Right exists but Left is null, render an invisible placeholder 
-             // to keep the Right child on the Right side visually.
              node.right && (
                 <li className="relative float-left text-center list-none p-4 pt-8 opacity-0 pointer-events-none">
                   <div className="w-14 h-14"></div>
@@ -75,7 +65,6 @@ const RecursiveTreeNode = ({
           {node.right ? (
             <RecursiveTreeNode node={node.right} selectedId={selectedId} onSelect={onSelect} />
           ) : (
-            // If Left exists but Right is null, render placeholder
             node.left && (
                 <li className="relative float-left text-center list-none p-4 pt-8 opacity-0 pointer-events-none">
                   <div className="w-14 h-14"></div>
@@ -89,6 +78,7 @@ const RecursiveTreeNode = ({
 };
 
 export default function BinaryTreeSimulator() {
+  const router = useRouter(); // Initialize Router
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [selectedId, setSelectedId] = useState<NodeId | null>(null);
   const [newValue, setNewValue] = useState('');
@@ -136,44 +126,41 @@ export default function BinaryTreeSimulator() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* CRITICAL CSS FOR TREE CONNECTORS 
-        We inject this locally to handle the lines (::before, ::after)
-      */}
+      {/* CSS for Tree Connectors */}
       <style jsx global>{`
-        /* Connector Lines Setup */
         .tree ul { position: relative; padding-top: 20px; transition: all 0.5s; }
         .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; transition: all 0.5s; }
-
-        /* Vertical Line Down */
         .tree li::before, .tree li::after {
           content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #334155; width: 50%; height: 20px;
         }
         .tree li::after { right: auto; left: 50%; border-left: 2px solid #334155; }
-
-        /* Remove connectors for single children to avoid loose ends */
         .tree li:only-child::after, .tree li:only-child::before { display: none; }
         .tree li:only-child { padding-top: 0; }
-
-        /* Remove left connector from first child and right connector from last child */
         .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
-        
-        /* Add vertical line back for the last child of a group */
         .tree li:last-child::before { border-right: 2px solid #334155; border-radius: 0 5px 0 0; }
         .tree li:first-child::after { border-radius: 5px 0 0 0; }
-
-        /* Downward connector from parent to children */
         .tree ul ul::before {
           content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #334155; width: 0; height: 20px;
         }
       `}</style>
 
-      {/* --- Header / Controls --- */}
+      {/* --- Toolbar --- */}
       <header className="bg-white/90 backdrop-blur-sm border-b border-slate-200 p-4 shadow-sm z-50 sticky top-0">
-        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          
+          {/* Left Side: Back Button & Title */}
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => router.back()}
+              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors"
+              title="Go Back"
+            >
+              <ArrowLeft size={20} />
+            </button>
             <h1 className="text-xl font-bold text-slate-800">Binary Tree Sim</h1>
           </div>
 
+          {/* Right Side: Controls */}
           <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
             <input
               type="text"
@@ -229,8 +216,7 @@ export default function BinaryTreeSimulator() {
         </div>
       </header>
 
-      {/* --- Tree Visualization --- */}
-      {/* Added Hexagon Background Pattern via Inline Style SVG */}
+      {/* --- Main Area with Hexagon Background --- */}
       <main 
         className="flex-1 overflow-auto cursor-grab active:cursor-grabbing bg-slate-50 relative"
         style={{
