@@ -309,7 +309,7 @@ export default function BinaryTreeSimulator() {
             <button onClick={() => router.back()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
               <ArrowLeft size={20} />
             </button>
-            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">Tree Sim</h1>
+            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">Binary Tree Simulator</h1>
           </div>
 
           {/* Edit Controls */}
