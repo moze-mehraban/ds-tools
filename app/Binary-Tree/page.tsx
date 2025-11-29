@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, Plus, RefreshCw, ArrowLeft, Search, Activity } from 'lucide-react';
+import { 
+  Trash2, Plus, RefreshCw, ArrowLeft, 
+  Search, Activity, Play, Layers, MousePointer2 
+} from 'lucide-react';
 
 // --- Types ---
 type NodeId = string;
@@ -16,63 +19,73 @@ interface TreeNode {
 
 // --- Algorithms & Math Helpers ---
 
-// 1. Get Node Height (Distance to deepest leaf)
 const getHeight = (node: TreeNode | null): number => {
   if (!node) return -1;
   return 1 + Math.max(getHeight(node.left), getHeight(node.right));
 };
 
-// 2. Get Node Depth (Distance from root)
 const getDepth = (root: TreeNode | null, targetId: NodeId, currentDepth = 0): number => {
   if (!root) return -1;
   if (root.id === targetId) return currentDepth;
-  
   const left = getDepth(root.left, targetId, currentDepth + 1);
   if (left !== -1) return left;
-  
   return getDepth(root.right, targetId, currentDepth + 1);
 };
 
-// 3. Get Balance Factor (Left Height - Right Height)
 const getBalanceFactor = (node: TreeNode | null): number => {
   if (!node) return 0;
   return getHeight(node.left) - getHeight(node.right);
 };
 
-// 4. BFS Generator (Returns array of IDs visited)
-const getBFSPath = (root: TreeNode | null, targetValue: string) => {
-  if (!root) return { path: [], found: false };
+// --- Traversal Generators ---
+
+const getBFSPath = (root: TreeNode | null) => {
+  if (!root) return [];
   const queue = [root];
   const path: NodeId[] = [];
-  
   while (queue.length > 0) {
     const current = queue.shift()!;
     path.push(current.id);
-    if (current.value === targetValue) return { path, found: true };
     if (current.left) queue.push(current.left);
     if (current.right) queue.push(current.right);
   }
-  return { path, found: false };
+  return path;
 };
 
-// 5. DFS Generator (Pre-order traversal path)
-const getDFSPath = (root: TreeNode | null, targetValue: string) => {
+const getPreOrderPath = (root: TreeNode | null) => {
   const path: NodeId[] = [];
-  let found = false;
-
   const traverse = (node: TreeNode | null) => {
-    if (!node || found) return;
+    if (!node) return;
     path.push(node.id);
-    if (node.value === targetValue) {
-      found = true;
-      return;
-    }
     traverse(node.left);
     traverse(node.right);
   };
-
   traverse(root);
-  return { path, found };
+  return path;
+};
+
+const getInOrderPath = (root: TreeNode | null) => {
+  const path: NodeId[] = [];
+  const traverse = (node: TreeNode | null) => {
+    if (!node) return;
+    traverse(node.left);
+    path.push(node.id);
+    traverse(node.right);
+  };
+  traverse(root);
+  return path;
+};
+
+const getPostOrderPath = (root: TreeNode | null) => {
+  const path: NodeId[] = [];
+  const traverse = (node: TreeNode | null) => {
+    if (!node) return;
+    traverse(node.left);
+    traverse(node.right);
+    path.push(node.id);
+  };
+  traverse(root);
+  return path;
 };
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -96,15 +109,13 @@ const RecursiveTreeNode = ({
   const isFound = node.id === foundId;
   const isLeaf = !node.left && !node.right;
 
-  // Determine Color State
-  let bgClass = 'bg-white border-slate-800 text-slate-900'; // Default
+  let bgClass = 'bg-white border-slate-800 text-slate-900';
   if (isFound) bgClass = 'bg-green-500 border-green-700 text-white scale-110 shadow-[0_0_15px_rgba(34,197,94,0.6)]';
   else if (isVisiting) bgClass = 'bg-yellow-400 border-yellow-600 text-black scale-105 shadow-md';
   else if (isSelected) bgClass = 'bg-blue-600 border-blue-800 text-white scale-110 shadow-lg';
 
   return (
     <li className="relative float-left text-center list-none p-4 pt-8">
-      {/* Node Circle */}
       <div 
         onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
         className={`
@@ -115,23 +126,17 @@ const RecursiveTreeNode = ({
       >
         {node.value}
       </div>
-
-      {/* Children Container */}
       {(!isLeaf) && (
         <ul className="flex justify-center pt-4 relative">
           {node.left ? (
             <RecursiveTreeNode node={node.left} selectedId={selectedId} visitingId={visitingId} foundId={foundId} onSelect={onSelect} />
           ) : (
-             node.right && (
-                <li className="relative float-left text-center list-none p-4 pt-8 opacity-0 pointer-events-none"><div className="w-14 h-14"></div></li>
-             )
+             node.right && <li className="relative float-left p-4 pt-8 opacity-0 pointer-events-none"><div className="w-14 h-14"></div></li>
           )}
           {node.right ? (
             <RecursiveTreeNode node={node.right} selectedId={selectedId} visitingId={visitingId} foundId={foundId} onSelect={onSelect} />
           ) : (
-            node.left && (
-                <li className="relative float-left text-center list-none p-4 pt-8 opacity-0 pointer-events-none"><div className="w-14 h-14"></div></li>
-             )
+            node.left && <li className="relative float-left p-4 pt-8 opacity-0 pointer-events-none"><div className="w-14 h-14"></div></li>
           )}
         </ul>
       )}
@@ -143,21 +148,28 @@ export default function BinaryTreeSimulator() {
   const router = useRouter();
   const [tree, setTree] = useState<TreeNode | null>(null);
   
-  // Interaction State
+  // State
   const [selectedId, setSelectedId] = useState<NodeId | null>(null);
   const [newValue, setNewValue] = useState('');
-  
-  // Search/Animation State
   const [searchValue, setSearchValue] = useState('');
+  
+  // Animation State
   const [visitingId, setVisitingId] = useState<NodeId | null>(null);
   const [foundId, setFoundId] = useState<NodeId | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
 
-  // --- Logic Helpers ---
+  // --- Logic ---
   const findNode = (root: TreeNode | null, id: NodeId): TreeNode | null => {
     if (!root) return null;
     if (root.id === id) return root;
     return findNode(root.left, id) || findNode(root.right, id);
+  };
+
+  const findNodeByValue = (root: TreeNode | null, val: string): TreeNode | null => {
+    if (!root) return null;
+    if (root.value === val) return root;
+    return findNodeByValue(root.left, val) || findNodeByValue(root.right, val);
   };
 
   const insertNode = (parentId: NodeId | null, side: 'left' | 'right', value: string) => {
@@ -189,52 +201,70 @@ export default function BinaryTreeSimulator() {
     setSelectedId(null);
   };
 
-  // --- Animation Runner ---
-  const runSearch = (type: 'BFS' | 'DFS') => {
-    if (!tree || !searchValue) return;
+  // --- Unified Animation Runner ---
+  const runAnimation = (type: 'BFS' | 'DFS' | 'PRE' | 'IN' | 'POST') => {
+    if (!tree) return;
     
-    // Reset previous states
+    const isSearch = (type === 'BFS' || type === 'DFS') && searchValue !== '';
+    
+    let path: NodeId[] = [];
+    if (type === 'BFS') path = getBFSPath(tree);
+    else if (type === 'DFS' || type === 'PRE') path = getPreOrderPath(tree); // DFS usually implies PreOrder visually
+    else if (type === 'IN') path = getInOrderPath(tree);
+    else if (type === 'POST') path = getPostOrderPath(tree);
+
+    let foundNodeId: string | null = null;
+    if (isSearch) {
+        const targetNode = findNodeByValue(tree, searchValue);
+        if (!targetNode) {
+            alert(`Value ${searchValue} not found in tree.`);
+            return;
+        }
+        const index = path.indexOf(targetNode.id);
+        if (index !== -1) {
+            path = path.slice(0, index + 1);
+            foundNodeId = targetNode.id;
+        }
+    }
+
     setSelectedId(null);
     setFoundId(null);
     setVisitingId(null);
     setIsAnimating(true);
-
-    const { path, found } = type === 'BFS' 
-      ? getBFSPath(tree, searchValue) 
-      : getDFSPath(tree, searchValue);
+    setStatusMessage(isSearch ? `Searching for ${searchValue}...` : `Running ${type}-Order Traversal...`);
 
     let step = 0;
-    
     const interval = setInterval(() => {
       if (step >= path.length) {
         clearInterval(interval);
         setIsAnimating(false);
-        if (!found) alert('Value not found in tree');
+        setStatusMessage('');
+        if (isSearch && foundNodeId) {
+            setFoundId(foundNodeId);
+        }
         return;
       }
 
-      const nodeId = path[step];
-      setVisitingId(nodeId);
-
-      // If this is the last step and it was found
-      if (step === path.length - 1 && found) {
-        setFoundId(nodeId);
-        setVisitingId(null); // Stop visiting, keep found
-      }
-
+      setVisitingId(path[step]);
       step++;
-    }, 600); // 600ms delay between steps
+    }, 600);
   };
 
-  // --- Derived Data ---
+  // Stats
   const selectedNode = tree && selectedId ? findNode(tree, selectedId) : null;
   const canAddLeft = selectedNode && !selectedNode.left && !isAnimating;
   const canAddRight = selectedNode && !selectedNode.right && !isAnimating;
   
-  // Calculate stats for details panel
   const nodeHeight = selectedNode ? getHeight(selectedNode) : '-';
   const nodeDepth = selectedNode ? getDepth(tree, selectedId!) : '-';
   const balanceFactor = selectedNode ? getBalanceFactor(selectedNode) : '-';
+
+  const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    const val = e.target.value;
+    if (val === '' || /^[0-9]+$/.test(val)) {
+        setter(val);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -251,71 +281,38 @@ export default function BinaryTreeSimulator() {
         .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #334155; width: 0; height: 20px; }
       `}</style>
 
-      {/* --- Header --- */}
+      {/* --- Top Header (Edit Tools Only) --- */}
       <header className="bg-white/90 backdrop-blur-sm border-b border-slate-200 p-4 shadow-sm z-50 sticky top-0">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
           
-          <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="flex items-center gap-4">
             <button onClick={() => router.back()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
               <ArrowLeft size={20} />
             </button>
-            <h1 className="text-xl font-bold text-slate-800">Binary Tree Sim</h1>
+            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">Tree Sim</h1>
           </div>
 
-          {/* Controls Group */}
-          <div className="flex items-center gap-4">
-            
-            {/* Edit Tools */}
-            <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
-              <input
-                type="text" placeholder="Val" value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                disabled={isAnimating}
-                className="px-3 py-1.5 rounded-md border border-slate-300 w-16 text-sm outline-none text-slate-900"
-                maxLength={3}
-              />
-              {!tree ? (
-                <button onClick={() => insertNode(null, 'left', newValue || 'Root')} className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm">
-                  <Plus size={16} /> Init
-                </button>
-              ) : (
-                <>
-                  <button disabled={!canAddLeft || !newValue} onClick={() => { if(selectedId) insertNode(selectedId, 'left', newValue); setNewValue(''); }} className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 rounded-md text-sm">+ L</button>
-                  <button disabled={!canAddRight || !newValue} onClick={() => { if(selectedId) insertNode(selectedId, 'right', newValue); setNewValue(''); }} className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 rounded-md text-sm">+ R</button>
-                  <button disabled={!selectedId || isAnimating} onClick={() => selectedId && deleteNode(selectedId)} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-md disabled:opacity-50"><Trash2 size={18} /></button>
-                </>
-              )}
-               <button onClick={() => { setTree(null); setSelectedId(null); setFoundId(null); setVisitingId(null); }} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-md ml-1"><RefreshCw size={18} /></button>
-            </div>
-
-            {/* Separator */}
-            <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
-
-            {/* Search Tools */}
-            <div className="flex items-center gap-2 bg-indigo-50 p-1.5 rounded-lg border border-indigo-100">
-               <input
-                type="text" placeholder="Find" value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                disabled={isAnimating}
-                className="px-3 py-1.5 rounded-md border border-indigo-200 w-16 text-sm outline-none text-slate-900 focus:border-indigo-500"
-                maxLength={3}
-              />
-              <button 
-                onClick={() => runSearch('BFS')} 
-                disabled={!tree || !searchValue || isAnimating}
-                className="px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300 rounded-md text-xs font-bold tracking-wide transition"
-              >
-                BFS
+          {/* Edit Controls */}
+          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200">
+            <input
+              type="text" placeholder="Num" value={newValue}
+              onChange={(e) => handleNumberInput(e, setNewValue)}
+              disabled={isAnimating}
+              className="px-4 py-2 rounded-md border border-slate-300 w-24 text-lg font-medium outline-none text-slate-900 focus:ring-2 focus:ring-blue-500"
+              maxLength={3}
+            />
+            {!tree ? (
+              <button onClick={() => insertNode(null, 'left', newValue || '50')} className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-bold shadow-sm">
+                <Plus size={16} /> Init Root
               </button>
-              <button 
-                onClick={() => runSearch('DFS')} 
-                disabled={!tree || !searchValue || isAnimating}
-                className="px-3 py-1.5 bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-300 rounded-md text-xs font-bold tracking-wide transition"
-              >
-                DFS
-              </button>
-            </div>
-
+            ) : (
+              <>
+                <button disabled={!canAddLeft || !newValue} onClick={() => { if(selectedId) insertNode(selectedId, 'left', newValue); setNewValue(''); }} className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 rounded-md text-sm font-bold shadow-sm">+ Left</button>
+                <button disabled={!canAddRight || !newValue} onClick={() => { if(selectedId) insertNode(selectedId, 'right', newValue); setNewValue(''); }} className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 rounded-md text-sm font-bold shadow-sm">+ Right</button>
+                <button disabled={!selectedId || isAnimating} onClick={() => selectedId && deleteNode(selectedId)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-md disabled:opacity-50 border border-transparent hover:border-rose-200"><Trash2 size={18} /></button>
+              </>
+            )}
+             <button onClick={() => { setTree(null); setSelectedId(null); setFoundId(null); setVisitingId(null); }} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md ml-1" title="Reset Tree"><RefreshCw size={18} /></button>
           </div>
         </div>
       </header>
@@ -331,8 +328,8 @@ export default function BinaryTreeSimulator() {
         <div className="min-w-max min-h-max p-20 flex justify-center tree z-10 relative">
           {!tree ? (
             <div className="mt-20 text-center text-slate-400 bg-white/80 p-8 rounded-xl shadow-sm backdrop-blur-sm border border-slate-200">
-              <Plus size={32} className="mx-auto mb-4 text-slate-300" />
-              <p className="font-medium text-slate-600">Tree is empty.</p>
+              <MousePointer2 size={32} className="mx-auto mb-4 text-slate-300" />
+              <p className="font-medium text-slate-600">Start by creating a Root Node.</p>
             </div>
           ) : (
             <ul className="flex">
@@ -354,31 +351,68 @@ export default function BinaryTreeSimulator() {
         </div>
       </main>
 
-      {/* --- Node Details Panel (Bottom Right) --- */}
-      {selectedId && selectedNode && !isAnimating && (
-        <div className="fixed bottom-6 right-6 w-64 bg-white/90 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center gap-2">
-            <Activity size={16} className="text-blue-500" />
-            <h3 className="font-bold text-slate-700 text-sm">Node Details</h3>
+      {/* --- Bottom Left: Algorithms Menu --- */}
+      <div className="fixed bottom-6 left-6 w-80 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl p-4 z-50 flex flex-col gap-4">
+          
+          {/* Section 1: Search */}
+          <div>
+            <div className="flex items-center gap-2 mb-2 text-slate-500">
+                <Search size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">Search Node</span>
+            </div>
+            <div className="flex gap-2">
+                <input
+                    type="text" placeholder="Val" value={searchValue}
+                    onChange={(e) => handleNumberInput(e, setSearchValue)}
+                    disabled={isAnimating}
+                    className="flex-1 px-3 py-2 rounded-md border border-slate-300 text-lg font-medium outline-none focus:ring-2 focus:ring-indigo-500 w-full"
+                    maxLength={3}
+                />
+                <button onClick={() => runAnimation('BFS')} disabled={!tree || !searchValue || isAnimating} className="px-3 bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 rounded-md text-xs font-bold shadow-sm transition-colors">BFS</button>
+                <button onClick={() => runAnimation('DFS')} disabled={!tree || !searchValue || isAnimating} className="px-3 bg-purple-600 text-white hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 rounded-md text-xs font-bold shadow-sm transition-colors">DFS</button>
+            </div>
           </div>
-          <div className="p-4 space-y-3">
+
+          <div className="h-px bg-slate-100 w-full"></div>
+
+          {/* Section 2: Traversal */}
+          <div>
+            <div className="flex items-center gap-2 mb-2 text-slate-500">
+                <Layers size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">Traversal</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                <button onClick={() => runAnimation('PRE')} disabled={!tree || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold transition-colors disabled:opacity-50">Pre-Order</button>
+                <button onClick={() => runAnimation('IN')} disabled={!tree || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold transition-colors disabled:opacity-50">In-Order</button>
+                <button onClick={() => runAnimation('POST')} disabled={!tree || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold transition-colors disabled:opacity-50">Post-Order</button>
+            </div>
+          </div>
+      </div>
+
+      {/* --- Bottom Right: Node Details Panel --- */}
+      {selectedId && selectedNode && !isAnimating && (
+        <div className="fixed bottom-6 right-6 w-64 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <Activity size={16} className="text-blue-500" />
+            <h3 className="font-bold text-slate-700 text-sm">Node Statistics</h3>
+          </div>
+          <div className="p-4 space-y-4">
              <div className="flex justify-between items-center">
-                <span className="text-slate-500 text-sm">Value</span>
-                <span className="font-mono font-bold text-lg text-slate-800">{selectedNode.value}</span>
+                <span className="text-slate-500 text-sm font-medium">Value</span>
+                <span className="font-mono font-bold text-xl text-slate-800 bg-slate-100 px-2 rounded">{selectedNode.value}</span>
              </div>
-             <div className="w-full h-px bg-slate-100"></div>
              
-             <div className="grid grid-cols-3 gap-2 text-center">
+             <div className="grid grid-cols-3 gap-2 text-center bg-slate-50 p-2 rounded-lg border border-slate-100">
                 <div>
-                   <div className="text-xs text-slate-400 uppercase font-bold">Height</div>
+                   <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Height</div>
                    <div className="text-blue-600 font-bold">{nodeHeight}</div>
                 </div>
-                <div className="border-l border-slate-100">
-                   <div className="text-xs text-slate-400 uppercase font-bold">Depth</div>
+                <div className="border-l border-slate-200">
+                   <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Depth</div>
                    <div className="text-purple-600 font-bold">{nodeDepth}</div>
                 </div>
-                <div className="border-l border-slate-100">
-                   <div className="text-xs text-slate-400 uppercase font-bold">Balance</div>
+                <div className="border-l border-slate-200">
+                   <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Balance</div>
                    <div className={`font-bold ${Number(balanceFactor) === 0 ? 'text-green-500' : 'text-orange-500'}`}>
                      {balanceFactor}
                    </div>
@@ -388,11 +422,11 @@ export default function BinaryTreeSimulator() {
         </div>
       )}
 
-      {/* Animation Status Overlay */}
+      {/* Animation Status Overlay (Centered Bottom) */}
       {isAnimating && (
-         <div className="fixed bottom-6 right-6 bg-indigo-900 text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-3 animate-pulse z-50">
-            <Search size={18} />
-            <span className="font-medium">Searching...</span>
+         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-pulse z-50 border border-slate-700">
+            <Play size={18} className="fill-current text-green-400" />
+            <span className="font-medium tracking-wide text-sm">{statusMessage}</span>
          </div>
       )}
 
