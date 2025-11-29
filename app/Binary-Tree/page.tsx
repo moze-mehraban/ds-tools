@@ -44,10 +44,10 @@ const RecursiveTreeNode = ({
         onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
         className={`
           relative inline-flex items-center justify-center w-14 h-14 rounded-full border-2 
-          transition-all duration-200 z-10 cursor-pointer select-none
+          transition-all duration-200 z-10 cursor-pointer select-none shadow-sm
           ${isSelected 
             ? 'bg-blue-600 border-blue-800 text-white scale-110 shadow-lg' 
-            : 'bg-white border-slate-800 text-slate-900 hover:bg-slate-100'
+            : 'bg-white border-slate-800 text-slate-900 hover:bg-slate-50 hover:border-blue-500'
           }
         `}
       >
@@ -168,7 +168,7 @@ export default function BinaryTreeSimulator() {
       `}</style>
 
       {/* --- Header / Controls --- */}
-      <header className="bg-white border-b border-slate-200 p-4 shadow-sm z-50 sticky top-0">
+      <header className="bg-white/90 backdrop-blur-sm border-b border-slate-200 p-4 shadow-sm z-50 sticky top-0">
         <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-800">Binary Tree Sim</h1>
@@ -187,7 +187,7 @@ export default function BinaryTreeSimulator() {
             {!tree ? (
               <button 
                 onClick={() => insertNode(null, 'left', newValue || 'Root')}
-                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm transition"
+                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm transition shadow-sm"
               >
                 <Plus size={16} /> Initialize
               </button>
@@ -196,14 +196,14 @@ export default function BinaryTreeSimulator() {
                 <button
                   disabled={!canAddLeft || !newValue}
                   onClick={() => { if (selectedId) insertNode(selectedId, 'left', newValue); setNewValue(''); }}
-                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md text-sm font-medium transition"
+                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md text-sm font-medium transition shadow-sm"
                 >
                   + Left
                 </button>
                 <button
                   disabled={!canAddRight || !newValue}
                   onClick={() => { if (selectedId) insertNode(selectedId, 'right', newValue); setNewValue(''); }}
-                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md text-sm font-medium transition"
+                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md text-sm font-medium transition shadow-sm"
                 >
                   + Right
                 </button>
@@ -230,14 +230,22 @@ export default function BinaryTreeSimulator() {
       </header>
 
       {/* --- Tree Visualization --- */}
-      <main className="flex-1 overflow-auto cursor-grab active:cursor-grabbing bg-slate-50 relative">
-        <div className="min-w-max min-h-max p-20 flex justify-center tree">
+      {/* Added Hexagon Background Pattern via Inline Style SVG */}
+      <main 
+        className="flex-1 overflow-auto cursor-grab active:cursor-grabbing bg-slate-50 relative"
+        style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg id='hexagons' fill='%2394a3b8' fill-opacity='0.15' fill-rule='nonzero'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-7.5l12.99-7.5H28v2.31h-.01L17 42.65V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundSize: 'auto'
+        }}
+      >
+        <div className="min-w-max min-h-max p-20 flex justify-center tree z-10 relative">
           {!tree ? (
-            <div className="mt-20 text-center text-slate-400">
-              <div className="inline-block p-4 border-2 border-dashed border-slate-300 rounded-full mb-4">
+            <div className="mt-20 text-center text-slate-400 bg-white/80 p-8 rounded-xl shadow-sm backdrop-blur-sm border border-slate-200">
+              <div className="inline-block p-4 border-2 border-dashed border-slate-300 rounded-full mb-4 text-slate-300">
                 <Plus size={32} />
               </div>
-              <p>Tree is empty. Add a Root node.</p>
+              <p className="font-medium text-slate-600">Tree is empty.</p>
+              <p className="text-sm">Enter a value and initialize the Root.</p>
             </div>
           ) : (
             <ul className="flex">
