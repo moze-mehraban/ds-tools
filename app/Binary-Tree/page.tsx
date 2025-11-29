@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Trash2, Plus, RefreshCw, ArrowLeft, 
-  Search, Activity, Play, Layers, MousePointer2 
+  Search, Activity, Play, Layers, MousePointer2, AlertCircle 
 } from 'lucide-react';
 
 // --- Types ---
@@ -158,6 +158,7 @@ export default function BinaryTreeSimulator() {
   const [foundId, setFoundId] = useState<NodeId | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [statusType, setStatusType] = useState<'neutral' | 'success' | 'error'>('neutral');
 
   // --- Logic ---
   const findNode = (root: TreeNode | null, id: NodeId): TreeNode | null => {
@@ -207,47 +208,66 @@ export default function BinaryTreeSimulator() {
     
     const isSearch = (type === 'BFS' || type === 'DFS') && searchValue !== '';
     
+    // 1. Calculate the FULL path first
     let path: NodeId[] = [];
     if (type === 'BFS') path = getBFSPath(tree);
-    else if (type === 'DFS' || type === 'PRE') path = getPreOrderPath(tree); // DFS usually implies PreOrder visually
+    else if (type === 'DFS' || type === 'PRE') path = getPreOrderPath(tree);
     else if (type === 'IN') path = getInOrderPath(tree);
     else if (type === 'POST') path = getPostOrderPath(tree);
 
     let foundNodeId: string | null = null;
+    
     if (isSearch) {
         const targetNode = findNodeByValue(tree, searchValue);
-        if (!targetNode) {
-            alert(`Value ${searchValue} not found in tree.`);
-            return;
-        }
-        const index = path.indexOf(targetNode.id);
-        if (index !== -1) {
-            path = path.slice(0, index + 1);
-            foundNodeId = targetNode.id;
-        }
+        if (targetNode) {
+            // IF FOUND: Trim the path to stop exactly at the target
+            const index = path.indexOf(targetNode.id);
+            if (index !== -1) {
+                path = path.slice(0, index + 1);
+                foundNodeId = targetNode.id;
+            }
+        } 
+        // IF NOT FOUND: We do NOT trim the path. 
+        // We let the animation run through the entire tree (simulating the search failure).
     }
 
+    // Reset UI
     setSelectedId(null);
     setFoundId(null);
     setVisitingId(null);
     setIsAnimating(true);
-    setStatusMessage(isSearch ? `Searching for ${searchValue}...` : `Running ${type}-Order Traversal...`);
+    setStatusType('neutral');
+    setStatusMessage(isSearch ? `Searching for ${searchValue}...` : `Running ${type}-Order...`);
 
     let step = 0;
     const interval = setInterval(() => {
+      // End of Path reached
       if (step >= path.length) {
         clearInterval(interval);
         setIsAnimating(false);
-        setStatusMessage('');
-        if (isSearch && foundNodeId) {
-            setFoundId(foundNodeId);
+        setVisitingId(null);
+        
+        if (isSearch) {
+            if (foundNodeId) {
+                setFoundId(foundNodeId);
+                setStatusType('success');
+                setStatusMessage(`Found value ${searchValue}!`);
+                setTimeout(() => { setStatusMessage(''); setStatusType('neutral'); }, 3000);
+            } else {
+                setStatusType('error');
+                setStatusMessage(`Value ${searchValue} not found.`);
+                setTimeout(() => { setStatusMessage(''); setStatusType('neutral'); }, 3000);
+            }
+        } else {
+            setStatusMessage('');
         }
         return;
       }
 
+      // Visit current node
       setVisitingId(path[step]);
       step++;
-    }, 600);
+    }, 600); // 600ms per step
   };
 
   // Stats
@@ -423,9 +443,16 @@ export default function BinaryTreeSimulator() {
       )}
 
       {/* Animation Status Overlay (Centered Bottom) */}
-      {isAnimating && (
-         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-pulse z-50 border border-slate-700">
-            <Play size={18} className="fill-current text-green-400" />
+      {statusMessage && (
+         <div className={`
+            fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 z-50 border transition-all duration-300
+            ${statusType === 'error' ? 'bg-red-900 border-red-800 text-white' : ''}
+            ${statusType === 'success' ? 'bg-green-900 border-green-800 text-white' : ''}
+            ${statusType === 'neutral' ? 'bg-slate-800 border-slate-700 text-white animate-pulse' : ''}
+         `}>
+            {statusType === 'error' && <AlertCircle size={18} className="text-red-400" />}
+            {statusType === 'success' && <Play size={18} className="text-green-400 fill-current" />}
+            {statusType === 'neutral' && <Play size={18} className="text-blue-400 fill-current" />}
             <span className="font-medium tracking-wide text-sm">{statusMessage}</span>
          </div>
       )}
