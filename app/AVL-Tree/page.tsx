@@ -546,11 +546,11 @@ export default function AVLTreeSimulator() {
         </div>
       </main>
 
-      {/* --- Zoom Controls (Bottom Right Floating) --- */}
-      <div className="fixed bottom-36 right-6 flex flex-col gap-2 bg-white p-2 rounded-lg shadow-lg border border-slate-200 z-50">
-         <button onClick={() => setTransform(p => ({...p, scale: Math.min(3, p.scale + 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600"><ZoomIn size={20} /></button>
-         <button onClick={() => setTransform(p => ({...p, scale: Math.max(0.1, p.scale - 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600"><ZoomOut size={20} /></button>
+      {/* --- Zoom Controls (Bottom Right Corner) --- */}
+      <div className="fixed bottom-6 right-6 flex flex-row items-center gap-1 bg-white p-1.5 rounded-lg shadow-lg border border-slate-200 z-50">
+         <button onClick={() => setTransform(p => ({...p, scale: Math.max(0.1, p.scale - 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600" title="Zoom Out"><ZoomOut size={20} /></button>
          <button onClick={() => setTransform({x:0, y:0, scale:1})} className="p-2 hover:bg-slate-100 rounded text-slate-600" title="Reset View"><Maximize size={20} /></button>
+         <button onClick={() => setTransform(p => ({...p, scale: Math.min(3, p.scale + 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600" title="Zoom In"><ZoomIn size={20} /></button>
       </div>
 
       {/* --- Bottom Left: Algorithms Menu (Collapsible) --- */}
@@ -605,11 +605,11 @@ export default function AVLTreeSimulator() {
             {menuOpen ? <X size={24} /> : <Search size={24} />}
           </button>
       </div>
-      {/* --- Bottom Right: Stats (Collapsible) --- */}
+      {/* --- Node Stats (Left of Zoom) --- */}
       {selectedId && selectedNode && !isAnimating && (
-        <div className="fixed bottom-6 right-6 w-64 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-6 right-44 w-64 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
           
-          {/* Header - Clickable to Toggle */}
+          {/* Header */}
           <div 
             onClick={() => setStatsOpen(!statsOpen)}
             className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
@@ -621,7 +621,7 @@ export default function AVLTreeSimulator() {
             {statsOpen ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronUp size={16} className="text-slate-400" />}
           </div>
 
-          {/* Body Content - Conditionally Rendered */}
+          {/* Body */}
           {statsOpen && (
             <div className="p-4 space-y-4">
               <div className="flex justify-between items-center">
@@ -648,7 +648,6 @@ export default function AVLTreeSimulator() {
           )}
         </div>
       )}
-
       {/* --- Status Toast --- */}
       {statusMessage && (
          <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 z-50 border transition-all duration-300 ${statusType === 'error' ? 'bg-red-900 border-red-800 text-white' : ''} ${statusType === 'success' ? 'bg-green-900 border-green-800 text-white' : ''} ${statusType === 'neutral' ? 'bg-slate-800 border-slate-700 text-white animate-pulse' : ''}`}>
