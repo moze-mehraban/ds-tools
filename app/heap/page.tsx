@@ -544,13 +544,34 @@ export default function HeapTreeSimulator() {
         <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <button onClick={() => router.back()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><ArrowLeft size={20}/></button>
-            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                Heap Simulator 
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-bold flex items-center gap-1 cursor-pointer transition-colors ${heapType === 'MAX' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-cyan-100 text-cyan-700 border-cyan-200 hover:bg-cyan-200'}`} onClick={handleToggleType}>
-                    {heapType === 'MAX' ? <ArrowUpIcon size={12}/> : <ArrowDownIcon size={12}/>}
-                    {heapType} Heap
-                </span>
-            </h1>
+            <div className="flex items-center gap-3">
+                <h1 className="text-xl font-bold text-slate-800">Heap Simulator</h1>
+                
+                {/* Flip Switch */}
+                <div 
+                    className="relative flex items-center bg-slate-200 rounded-full p-1 cursor-pointer w-32 h-9 shadow-inner select-none"
+                    onClick={handleToggleType}
+                >
+                    {/* Slider */}
+                    <motion.div 
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-sm flex items-center justify-center text-xs font-bold z-10 transition-colors
+                            ${heapType === 'MAX' ? 'bg-orange-500 text-white' : 'bg-cyan-500 text-white'}
+                        `}
+                        animate={{ 
+                            x: heapType === 'MAX' ? '100%' : '0%' 
+                        }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    >
+                        {heapType}
+                    </motion.div>
+
+                    {/* Labels */}
+                    <div className="flex w-full justify-between px-3 text-xs font-bold text-slate-500 z-0">
+                        <span className={heapType === 'MIN' ? 'opacity-0' : 'opacity-100'}>MIN</span>
+                        <span className={heapType === 'MAX' ? 'opacity-0' : 'opacity-100'}>MAX</span>
+                    </div>
+                </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200">
@@ -565,7 +586,7 @@ export default function HeapTreeSimulator() {
             <button onClick={handleInsert} disabled={!newValue || isAnimating} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-bold shadow-sm transition"><Plus size={16}/></button>
             <div className="w-px h-8 bg-slate-300 mx-1"></div>
             <button onClick={handleDeleteRoot} disabled={heap.length === 0 || isAnimating} className="bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 px-3 py-2 rounded-md text-sm font-bold shadow-sm transition flex items-center gap-1">
-                <Trash2 size={16}/> Extract {heapType === 'MAX' ? 'Max' : 'Min'}
+                <Trash2 size={16}/> Extract Root
             </button>
             <button onClick={() => { setHeap([]); setSelectedId(null); setTransform({x:0, y:0, scale:1}) }} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><RefreshCw size={18}/></button>
           </div>
