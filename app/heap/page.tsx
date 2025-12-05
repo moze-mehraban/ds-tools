@@ -7,7 +7,7 @@ import {
   Trash2, Plus, RefreshCw, ArrowLeft, 
   Activity, Play, Layers, AlertCircle, Gauge,
   ZoomIn, ZoomOut, Maximize, GitMerge, ChevronDown, ChevronUp, X,
-  ArrowUpIcon, ArrowDownIcon, KeyRound, ArrowUp, ArrowDown
+  ArrowUpIcon, ArrowDownIcon, KeyRound, ArrowUp, ArrowDown, Globe
 } from 'lucide-react';
 
 // --- Types ---
@@ -233,6 +233,33 @@ const generateUpdateKeySteps = (initialHeap: HeapNodeObj[], index: number, newVa
     return [...steps, ...fixSteps];
 }
 
+// Helper for Global Update Steps
+const generateGlobalUpdateSteps = (initialHeap: HeapNodeObj[], changeAmount: number): AnimationStep[] => {
+    const steps: AnimationStep[] = [];
+    const arr = initialHeap.map(n => ({...n})); // Deep copy nodes
+    const allIds = arr.map(n => n.id);
+
+    // Step 1: Highlight All (Visual cue that something big is happening)
+    steps.push({
+        heap: initialHeap, // Show old values first
+        highlightIds: allIds,
+        action: 'COMPARE',
+        description: `Preparing to ${changeAmount > 0 ? 'add' : 'subtract'} ${Math.abs(changeAmount)} to all nodes`
+    });
+
+    // Step 2: Update All Values
+    const updatedArr = arr.map(n => ({ ...n, value: n.value + changeAmount }));
+    
+    steps.push({
+        heap: updatedArr,
+        highlightIds: allIds,
+        action: 'DONE',
+        description: `Updated all values. Heap property preserved.`
+    });
+
+    return steps;
+};
+
 // Full Rebuild (Immediate)
 const buildHeap = (items: HeapNodeObj[], type: HeapType): HeapNodeObj[] => {
     const arr = [...items];
@@ -249,42 +276,6 @@ const buildHeap = (items: HeapNodeObj[], type: HeapType): HeapNodeObj[] => {
     }
     for (let i = Math.floor(arr.length / 2) - 1; i >= 0; i--) heapify(arr, i);
     return arr;
-};
-
-// --- TRAVERSALS (Visual Only) ---
-const getBFSPath = (items: HeapNodeObj[]) => items.map(n => n.id);
-const getPreOrderPath = (items: HeapNodeObj[]) => {
-    const path: string[] = [];
-    const traverse = (idx: number) => {
-        if (idx >= items.length) return;
-        path.push(items[idx].id);
-        traverse(2 * idx + 1);
-        traverse(2 * idx + 2);
-    };
-    traverse(0);
-    return path;
-};
-const getInOrderPath = (items: HeapNodeObj[]) => {
-    const path: string[] = [];
-    const traverse = (idx: number) => {
-        if (idx >= items.length) return;
-        traverse(2 * idx + 1);
-        path.push(items[idx].id);
-        traverse(2 * idx + 2);
-    };
-    traverse(0);
-    return path;
-};
-const getPostOrderPath = (items: HeapNodeObj[]) => {
-    const path: string[] = [];
-    const traverse = (idx: number) => {
-        if (idx >= items.length) return;
-        traverse(2 * idx + 1);
-        traverse(2 * idx + 2);
-        path.push(items[idx].id);
-    };
-    traverse(0);
-    return path;
 };
 
 // --- LAYOUT ENGINE ---
@@ -375,6 +366,7 @@ export default function HeapTreeSimulator() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newValue, setNewValue] = useState('');
   const [keyUpdateValue, setKeyUpdateValue] = useState(''); 
+  const [globalUpdateValue, setGlobalUpdateValue] = useState(''); // State for Global Ops
   const [statsOpen, setStatsOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   
@@ -475,7 +467,6 @@ export default function HeapTreeSimulator() {
       showToast('neutral', `Converted to ${newType} Heap`);
   };
 
-  // --- UPDATED: Key Operations with Auto-Increment/Decrement ---
   const handleKeyUpdate = (mode: 'INCREASE' | 'DECREASE') => {
       if (!selectedId) return;
       
@@ -485,7 +476,6 @@ export default function HeapTreeSimulator() {
 
       let changeAmount: number;
 
-      // Logic: If input is empty, perform Auto Step (+10 or -10)
       if (!keyUpdateValue) {
           changeAmount = 10;
       } else {
@@ -502,43 +492,31 @@ export default function HeapTreeSimulator() {
 
       const steps = generateUpdateKeySteps(heap, index, newValue, heapType);
       runHeapOperations(steps);
-      setKeyUpdateValue(''); // Clear input
+      setKeyUpdateValue(''); 
   };
 
-  const runTraversal = (type: 'PRE' | 'IN' | 'POST') => {
-    if (heap.length === 0) return;
-    let path: string[] = [];
-    if (type === 'PRE') path = getPreOrderPath(heap); 
-    else if (type === 'IN') path = getInOrderPath(heap);
-    else if (type === 'POST') path = getPostOrderPath(heap);
+  // --- NEW: Global Operations (Add/Sub All) ---
+  const handleGlobalUpdate = (mode: 'ADD' | 'SUB') => {
+      if (heap.length === 0) return;
 
-    setSelectedId(null);
-    setFoundId(null);
-    setVisitingId(null);
-    setHighlightIds([]);
-    setAnimationAction('');
-    setIsAnimating(true);
-    setStatusType('neutral');
-    setStatusMessage(`Running ${type}-Order...`);
-
-    let step = 0;
-    const interval = setInterval(() => {
-      if (step >= path.length) {
-        clearInterval(interval);
-        setIsAnimating(false);
-        setVisitingId(null);
-        setStatusMessage('');
-        return;
+      let changeAmount: number;
+      if (!globalUpdateValue) {
+          changeAmount = 10; // Default amount
+      } else {
+          changeAmount = parseInt(globalUpdateValue);
+          if (isNaN(changeAmount)) return;
       }
-      setVisitingId(path[step]);
-      step++;
-    }, speedConfig[animSpeed].interval);
+
+      // If subtracting, invert the amount for calculation
+      if (mode === 'SUB') changeAmount = -changeAmount;
+
+      const steps = generateGlobalUpdateSteps(heap, changeAmount);
+      runHeapOperations(steps);
+      setGlobalUpdateValue('');
   };
   
-  // UPDATED: Allow negative numbers in input
   const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const val = e.target.value;
-    // Allow empty string, "-" (for starting a negative number), or "-?" followed by digits
     if (val === '' || /^-?\d*$/.test(val)) setter(val);
   };
 
@@ -679,7 +657,7 @@ export default function HeapTreeSimulator() {
          <button onClick={() => setTransform(p => ({...p, scale: Math.min(3, p.scale + 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600"><ZoomIn size={20} /></button>
       </div>
 
-      {/* --- Left Menu (Key Operations & Traversals) --- */}
+      {/* --- Left Menu (Key Operations & Global Ops) --- */}
       <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-4">
           <AnimatePresence>
             {menuOpen && (
@@ -690,11 +668,11 @@ export default function HeapTreeSimulator() {
                     transition={{ duration: 0.2 }}
                     className="w-80 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl p-4 flex flex-col gap-4"
                 >
-                    {/* KEY OPERATIONS */}
+                    {/* KEY OPERATIONS (Single Node) */}
                     <div>
                         <div className="flex items-center gap-2 mb-2 text-slate-500">
                             <KeyRound size={16} /> 
-                            <span className="text-xs font-bold uppercase tracking-wider">Key Operations</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">Node Operations</span>
                         </div>
                         <div className="flex gap-2">
                             <input 
@@ -710,7 +688,7 @@ export default function HeapTreeSimulator() {
                                 onClick={() => handleKeyUpdate('DECREASE')} 
                                 disabled={!selectedId || isAnimating} 
                                 className="px-3 bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 rounded-md text-xs font-bold shadow-sm flex items-center"
-                                title="Decrease Key (Auto -10 if empty)"
+                                title="Decrease Key"
                             >
                                 <ArrowDown size={14} className="mr-1"/> Dec
                             </button>
@@ -718,7 +696,7 @@ export default function HeapTreeSimulator() {
                                 onClick={() => handleKeyUpdate('INCREASE')} 
                                 disabled={!selectedId || isAnimating} 
                                 className="px-3 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 rounded-md text-xs font-bold shadow-sm flex items-center"
-                                title="Increase Key (Auto +10 if empty)"
+                                title="Increase Key"
                             >
                                 <ArrowUp size={14} className="mr-1"/> Inc
                             </button>
@@ -728,13 +706,21 @@ export default function HeapTreeSimulator() {
 
                     <div className="h-px bg-slate-100 w-full"></div>
                     
-                    {/* TRAVERSALS */}
+                    {/* GLOBAL OPERATIONS (All Nodes) */}
                     <div>
-                        <div className="flex items-center gap-2 mb-2 text-slate-500"><Layers size={16} /> <span className="text-xs font-bold uppercase tracking-wider">Traversal</span></div>
-                        <div className="grid grid-cols-3 gap-2">
-                            <button onClick={() => runTraversal('PRE')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">Pre</button>
-                            <button onClick={() => runTraversal('IN')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">In</button>
-                            <button onClick={() => runTraversal('POST')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">Post</button>
+                        <div className="flex items-center gap-2 mb-2 text-slate-500"><Globe size={16} /> <span className="text-xs font-bold uppercase tracking-wider">Global Operations</span></div>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="Auto (+/- 10)" 
+                                value={globalUpdateValue} 
+                                onChange={(e) => handleNumberInput(e, setGlobalUpdateValue)} 
+                                disabled={isAnimating || heap.length === 0} 
+                                className="flex-1 px-3 py-2 rounded-md border border-slate-300 text-black outline-none focus:ring-2 focus:ring-indigo-500 w-full disabled:bg-slate-100 disabled:text-slate-400 placeholder:text-slate-400 placeholder:text-[10px]" 
+                                maxLength={5}
+                            />
+                            <button onClick={() => handleGlobalUpdate('ADD')} disabled={heap.length === 0 || isAnimating} className="px-3 bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 rounded-md text-xs font-bold shadow-sm">Add All</button>
+                            <button onClick={() => handleGlobalUpdate('SUB')} disabled={heap.length === 0 || isAnimating} className="px-3 bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 rounded-md text-xs font-bold shadow-sm">Sub All</button>
                         </div>
                     </div>
                 </motion.div>
