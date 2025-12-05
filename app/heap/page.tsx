@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trash2, Plus, RefreshCw, ArrowLeft, 
-  Search, Activity, Play, Layers, AlertCircle, Gauge,
+  Activity, Play, Layers, AlertCircle, Gauge,
   ZoomIn, ZoomOut, Maximize, GitMerge, ChevronDown, ChevronUp, X,
-  ArrowUpIcon, ArrowDownIcon
+  ArrowUpIcon, ArrowDownIcon, KeyRound, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 // --- Types ---
@@ -33,8 +33,8 @@ interface VisualNode {
   isSelected: boolean;
   isVisiting: boolean;
   isFound: boolean;
-  isComparing?: boolean; // New: For comparison step
-  isSwapping?: boolean;  // New: For swap step
+  isComparing?: boolean; 
+  isSwapping?: boolean;  
 }
 
 interface VisualEdge {
@@ -72,23 +72,14 @@ const arrayToTree = (items: HeapNodeObj[]): TreeNode | null => {
 };
 
 // Generator: Bubble Up Steps
-const generateHeapifyUpSteps = (initialHeap: HeapNodeObj[], type: HeapType): AnimationStep[] => {
+const generateHeapifyUpSteps = (initialHeap: HeapNodeObj[], startIndex: number, type: HeapType): AnimationStep[] => {
     const steps: AnimationStep[] = [];
     const arr = [...initialHeap];
-    let index = arr.length - 1;
-
-    // Step 1: Initial Insert
-    steps.push({ 
-        heap: [...arr], 
-        highlightIds: [arr[index].id], 
-        action: 'INSERT',
-        description: `Inserted ${arr[index].value} at end` 
-    });
+    let index = startIndex;
 
     while (index > 0) {
         const parentIndex = Math.floor((index - 1) / 2);
         
-        // Step 2: Compare
         steps.push({ 
             heap: [...arr], 
             highlightIds: [arr[index].id, arr[parentIndex].id], 
@@ -101,10 +92,7 @@ const generateHeapifyUpSteps = (initialHeap: HeapNodeObj[], type: HeapType): Ani
             : arr[index].value < arr[parentIndex].value;
 
         if (shouldSwap) {
-            // Swap in array
             [arr[index], arr[parentIndex]] = [arr[parentIndex], arr[index]];
-            
-            // Step 3: Swap Visual
             steps.push({ 
                 heap: [...arr], 
                 highlightIds: [arr[index].id, arr[parentIndex].id], 
@@ -116,6 +104,9 @@ const generateHeapifyUpSteps = (initialHeap: HeapNodeObj[], type: HeapType): Ani
             steps.push({ heap: [...arr], highlightIds: [arr[index].id, arr[parentIndex].id], action: 'DONE', description: 'Heap property satisfied' });
             break;
         }
+    }
+    if (steps.length === 0) {
+         steps.push({ heap: [...arr], highlightIds: [arr[index].id], action: 'DONE', description: 'Heap property satisfied' });
     }
     return steps;
 };
@@ -132,7 +123,6 @@ const generateHeapifyDownSteps = (initialHeap: HeapNodeObj[], startIndex: number
         let rightIdx = 2 * index + 2;
         let swapIdx = index;
 
-        // Highlight candidates for comparison
         const compareIds = [arr[index].id];
         if(leftIdx < length) compareIds.push(arr[leftIdx].id);
         if(rightIdx < length) compareIds.push(arr[rightIdx].id);
@@ -183,7 +173,6 @@ const generateDeleteRootSteps = (initialHeap: HeapNodeObj[], type: HeapType): An
     const arr = [...initialHeap];
     const rootId = arr[0].id;
     
-    // Step 1: Mark Root for Deletion
     steps.push({ 
         heap: [...arr], 
         highlightIds: [rootId], 
@@ -195,9 +184,8 @@ const generateDeleteRootSteps = (initialHeap: HeapNodeObj[], type: HeapType): An
         return [{ heap: [], highlightIds: [], action: 'DONE', description: 'Heap empty' }];
     }
 
-    // Step 2: Move Last to Root
     const lastNode = arr.pop()!;
-    arr[0] = lastNode; // Overwrite root with last
+    arr[0] = lastNode; 
     
     steps.push({
         heap: [...arr],
@@ -206,16 +194,48 @@ const generateDeleteRootSteps = (initialHeap: HeapNodeObj[], type: HeapType): An
         description: `Moved last node ${lastNode.value} to root`
     });
 
-    // Step 3: Bubble Down
     const downSteps = generateHeapifyDownSteps(arr, 0, type);
     return [...steps, ...downSteps];
 };
 
+// Helper for Key Update Sequence
+const generateUpdateKeySteps = (initialHeap: HeapNodeObj[], index: number, newValue: number, type: HeapType): AnimationStep[] => {
+    const steps: AnimationStep[] = [];
+    const arr = [...initialHeap]; // Shallow copy of array
+    const oldValue = arr[index].value;
+    
+    // Step 1: Update Value visually in a new object to preserve immutability of other steps
+    arr[index] = { ...arr[index], value: newValue };
+    
+    steps.push({
+        heap: [...arr],
+        highlightIds: [arr[index].id],
+        action: 'DELETE_PREP', 
+        description: `Updated key from ${oldValue} to ${newValue}`
+    });
+
+    // Step 2: Determine Direction
+    // Logic Table:
+    // MAX Heap: Increase -> Up, Decrease -> Down
+    // MIN Heap: Increase -> Down, Decrease -> Up
+    
+    let isUp = false;
+    if (type === 'MAX') {
+        isUp = newValue > oldValue;
+    } else {
+        isUp = newValue < oldValue;
+    }
+
+    const fixSteps = isUp 
+        ? generateHeapifyUpSteps(arr, index, type)
+        : generateHeapifyDownSteps(arr, index, type);
+
+    return [...steps, ...fixSteps];
+}
+
 // Full Rebuild (Immediate)
 const buildHeap = (items: HeapNodeObj[], type: HeapType): HeapNodeObj[] => {
     const arr = [...items];
-    const dummySteps = generateHeapifyDownSteps(arr, 0, type); // Just reusing logic logic, but we need raw calculation
-    // Re-implementing raw logic for instant toggle
     const heapify = (a: HeapNodeObj[], i: number) => {
         let largest = i;
         let l = 2 * i + 1;
@@ -304,7 +324,6 @@ const calculateLayout = (
         const pos = positions.get(node.id)!;
         const finalX = pos.x + offsetCorrection;
         
-        // Determine Visual State based on Animation Action
         const isHighlighted = highlightIds.includes(node.id);
         const isComparing = isHighlighted && actionType === 'COMPARE';
         const isSwapping = isHighlighted && actionType === 'SWAP';
@@ -315,7 +334,7 @@ const calculateLayout = (
             value: node.value,
             x: finalX,
             y: pos.y,
-            isSelected: node.id === selectedId || isDeletePrep, // Highlight delete target
+            isSelected: node.id === selectedId || isDeletePrep,
             isVisiting: node.id === visitingId,
             isFound: node.id === foundId,
             isComparing,
@@ -355,7 +374,7 @@ export default function HeapTreeSimulator() {
   // UI State
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newValue, setNewValue] = useState('');
-  const [searchValue, setSearchValue] = useState('');
+  const [keyUpdateValue, setKeyUpdateValue] = useState(''); 
   const [statsOpen, setStatsOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   
@@ -372,7 +391,7 @@ export default function HeapTreeSimulator() {
   const [statusType, setStatusType] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [animSpeed, setAnimSpeed] = useState<'normal' | 'slow' | 'verySlow'>('verySlow');
   
-  // New: Advanced Animation State
+  // Advanced Animation State
   const [highlightIds, setHighlightIds] = useState<string[]>([]);
   const [animationAction, setAnimationAction] = useState<string>('');
 
@@ -392,11 +411,9 @@ export default function HeapTreeSimulator() {
   const showToast = (type: 'neutral' | 'success' | 'error', msg: string) => {
       setStatusType(type);
       setStatusMessage(msg);
-      // Auto-hide only if not animating
       if (!isAnimating) setTimeout(() => setStatusMessage(''), 3000);
   };
 
-  // --- ANIMATION RUNNER ---
   const runHeapOperations = (steps: AnimationStep[]) => {
       setIsAnimating(true);
       let stepIdx = 0;
@@ -430,16 +447,14 @@ export default function HeapTreeSimulator() {
     const val = parseInt(newValue);
     if (isNaN(val)) return;
 
-    // 1. Create node
     const newNode: HeapNodeObj = { id: generateId(), value: val };
-    
-    // 2. Add to end
     const tempHeap = [...heap, newNode];
+    const steps = generateHeapifyUpSteps(tempHeap, tempHeap.length - 1, heapType);
     
-    // 3. Generate Bubbling Steps
-    const steps = generateHeapifyUpSteps(tempHeap, heapType);
-    
-    // 4. Run
+    if(steps.length > 0 && steps[0].action !== 'INSERT') {
+        steps.unshift({ heap: [...tempHeap], highlightIds: [newNode.id], action: 'INSERT', description: `Inserted ${val}`});
+    }
+
     runHeapOperations(steps);
     setNewValue('');
   };
@@ -460,28 +475,42 @@ export default function HeapTreeSimulator() {
       showToast('neutral', `Converted to ${newType} Heap`);
   };
 
-  const runSearchAnimation = (type: 'BFS' | 'DFS' | 'PRE' | 'IN' | 'POST') => {
+  // --- UPDATED: Key Operations with Auto-Increment/Decrement ---
+  const handleKeyUpdate = (mode: 'INCREASE' | 'DECREASE') => {
+      if (!selectedId) return;
+      
+      const index = heap.findIndex(n => n.id === selectedId);
+      if (index === -1) return;
+      const oldValue = heap[index].value;
+
+      let changeAmount: number;
+
+      // Logic: If input is empty, perform Auto Step (+10 or -10)
+      if (!keyUpdateValue) {
+          changeAmount = 10;
+      } else {
+          changeAmount = parseInt(keyUpdateValue);
+          if (isNaN(changeAmount)) return;
+      }
+
+      let newValue: number;
+      if (mode === 'INCREASE') {
+          newValue = oldValue + changeAmount;
+      } else {
+          newValue = oldValue - changeAmount;
+      }
+
+      const steps = generateUpdateKeySteps(heap, index, newValue, heapType);
+      runHeapOperations(steps);
+      setKeyUpdateValue(''); // Clear input
+  };
+
+  const runTraversal = (type: 'PRE' | 'IN' | 'POST') => {
     if (heap.length === 0) return;
-    const isSearch = (type === 'BFS' || type === 'DFS') && searchValue !== '';
-    
     let path: string[] = [];
-    if (type === 'BFS') path = getBFSPath(heap);
-    else if (type === 'DFS' || type === 'PRE') path = getPreOrderPath(heap); 
+    if (type === 'PRE') path = getPreOrderPath(heap); 
     else if (type === 'IN') path = getInOrderPath(heap);
     else if (type === 'POST') path = getPostOrderPath(heap);
-
-    let foundNodeId: string | null = null;
-    if (isSearch) {
-        const val = parseInt(searchValue);
-        const targetObj = heap.find(n => n.value === val);
-        if (targetObj) {
-            const index = path.indexOf(targetObj.id);
-            if (index !== -1) {
-                path = path.slice(0, index + 1);
-                foundNodeId = targetObj.id;
-            }
-        }
-    }
 
     setSelectedId(null);
     setFoundId(null);
@@ -490,7 +519,7 @@ export default function HeapTreeSimulator() {
     setAnimationAction('');
     setIsAnimating(true);
     setStatusType('neutral');
-    setStatusMessage(isSearch ? `Searching for ${searchValue}...` : `Running ${type}-Order...`);
+    setStatusMessage(`Running ${type}-Order...`);
 
     let step = 0;
     const interval = setInterval(() => {
@@ -498,16 +527,7 @@ export default function HeapTreeSimulator() {
         clearInterval(interval);
         setIsAnimating(false);
         setVisitingId(null);
-        if (isSearch) {
-            if (foundNodeId) {
-                setFoundId(foundNodeId);
-                showToast('success', `Found ${searchValue}`);
-            } else {
-                showToast('error', `${searchValue} not found`);
-            }
-        } else {
-            setStatusMessage('');
-        }
+        setStatusMessage('');
         return;
       }
       setVisitingId(path[step]);
@@ -515,9 +535,11 @@ export default function HeapTreeSimulator() {
     }, speedConfig[animSpeed].interval);
   };
   
+  // UPDATED: Allow negative numbers in input
   const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const val = e.target.value;
-    if (val === '' || /^[0-9]+$/.test(val)) setter(val);
+    // Allow empty string, "-" (for starting a negative number), or "-?" followed by digits
+    if (val === '' || /^-?\d*$/.test(val)) setter(val);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -546,26 +568,19 @@ export default function HeapTreeSimulator() {
             <button onClick={() => router.back()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><ArrowLeft size={20}/></button>
             <div className="flex items-center gap-3">
                 <h1 className="text-xl font-bold text-slate-800">Heap Simulator</h1>
-                
-                {/* Flip Switch */}
                 <div 
                     className="relative flex items-center bg-slate-200 rounded-full p-1 cursor-pointer w-32 h-9 shadow-inner select-none"
                     onClick={handleToggleType}
                 >
-                    {/* Slider */}
                     <motion.div 
                         className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-sm flex items-center justify-center text-xs font-bold z-10 transition-colors
                             ${heapType === 'MAX' ? 'bg-orange-500 text-white' : 'bg-cyan-500 text-white'}
                         `}
-                        animate={{ 
-                            x: heapType === 'MAX' ? '100%' : '0%' 
-                        }}
+                        animate={{ x: heapType === 'MAX' ? '100%' : '0%' }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     >
                         {heapType}
                     </motion.div>
-
-                    {/* Labels */}
                     <div className="flex w-full justify-between px-3 text-xs font-bold text-slate-500 z-0">
                         <span className={heapType === 'MIN' ? 'opacity-0' : 'opacity-100'}>MIN</span>
                         <span className={heapType === 'MAX' ? 'opacity-0' : 'opacity-100'}>MAX</span>
@@ -582,11 +597,11 @@ export default function HeapTreeSimulator() {
                ))}
             </div>
 
-            <input type="text" placeholder="Num" value={newValue} onChange={(e) => handleNumberInput(e, setNewValue)} onKeyDown={e => e.key === 'Enter' && handleInsert()} disabled={isAnimating} className="px-3 py-2 rounded-md border border-slate-300 w-20 outline-none text-black" maxLength={3}/>
+            <input type="text" placeholder="Num" value={newValue} onChange={(e) => handleNumberInput(e, setNewValue)} onKeyDown={e => e.key === 'Enter' && handleInsert()} disabled={isAnimating} className="px-3 py-2 rounded-md border border-slate-300 w-20 outline-none text-black" maxLength={5}/>
             <button onClick={handleInsert} disabled={!newValue || isAnimating} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-bold shadow-sm transition"><Plus size={16}/></button>
             <div className="w-px h-8 bg-slate-300 mx-1"></div>
             <button onClick={handleDeleteRoot} disabled={heap.length === 0 || isAnimating} className="bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 px-3 py-2 rounded-md text-sm font-bold shadow-sm transition flex items-center gap-1">
-                <Trash2 size={16}/>  Extract {heapType === 'MAX' ? 'Max' : 'Min'}
+                <Trash2 size={16}/> Extract Root
             </button>
             <button onClick={() => { setHeap([]); setSelectedId(null); setTransform({x:0, y:0, scale:1}) }} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><RefreshCw size={18}/></button>
           </div>
@@ -625,19 +640,16 @@ export default function HeapTreeSimulator() {
 
                     <AnimatePresence>
                         {visualNodes.map(node => {
-                            // Colors
                             let bg = 'bg-white border-slate-700 text-slate-800';
                             let zIndex = 10;
                             let scale = 1;
                             
-                            // 1. Search/Traversal Colors
                             if(node.isFound) { bg = 'bg-green-500 border-green-700 text-white shadow-[0_0_20px_rgba(34,197,94,0.5)]'; zIndex = 20; scale = 1.1; }
                             else if(node.isVisiting) { bg = 'bg-yellow-400 border-yellow-600 text-black shadow-lg'; zIndex = 20; scale = 1.1; }
                             
-                            // 2. Heap Animation Colors
                             if(node.isComparing) { bg = 'bg-yellow-300 border-yellow-600 text-black shadow-lg'; zIndex = 30; scale = 1.15; }
                             if(node.isSwapping) { bg = 'bg-indigo-400 border-indigo-600 text-white shadow-xl'; zIndex = 40; scale = 1.2; }
-                            if(node.isSelected) { bg = 'bg-rose-500 border-rose-700 text-white shadow-lg'; zIndex = 50; scale = 1.1; } // Used for delete prep
+                            if(node.isSelected) { bg = 'bg-rose-500 border-rose-700 text-white shadow-lg'; zIndex = 50; scale = 1.1; }
 
                             return (
                                 <motion.div
@@ -667,7 +679,7 @@ export default function HeapTreeSimulator() {
          <button onClick={() => setTransform(p => ({...p, scale: Math.min(3, p.scale + 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600"><ZoomIn size={20} /></button>
       </div>
 
-      {/* --- Left Menu --- */}
+      {/* --- Left Menu (Key Operations & Traversals) --- */}
       <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-4">
           <AnimatePresence>
             {menuOpen && (
@@ -678,27 +690,57 @@ export default function HeapTreeSimulator() {
                     transition={{ duration: 0.2 }}
                     className="w-80 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl p-4 flex flex-col gap-4"
                 >
+                    {/* KEY OPERATIONS */}
                     <div>
-                        <div className="flex items-center gap-2 mb-2 text-slate-500"><Search size={16} /> <span className="text-xs font-bold uppercase tracking-wider">Search</span></div>
-                        <div className="flex gap-2">
-                            <input type="text" placeholder="Val" value={searchValue} onChange={(e) => handleNumberInput(e, setSearchValue)} disabled={isAnimating} className="flex-1 px-3 py-2 rounded-md border border-slate-300 text-black outline-none focus:ring-2 focus:ring-indigo-500 w-full" maxLength={3}/>
-                            <button onClick={() => runSearchAnimation('BFS')} disabled={heap.length === 0 || !searchValue || isAnimating} className="px-3 bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-200 rounded-md text-xs font-bold shadow-sm">BFS</button>
-                            <button onClick={() => runSearchAnimation('DFS')} disabled={heap.length === 0 || !searchValue || isAnimating} className="px-3 bg-purple-600 text-white hover:bg-purple-700 disabled:bg-slate-200 rounded-md text-xs font-bold shadow-sm">DFS</button>
+                        <div className="flex items-center gap-2 mb-2 text-slate-500">
+                            <KeyRound size={16} /> 
+                            <span className="text-xs font-bold uppercase tracking-wider">Key Operations</span>
                         </div>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="Auto (+/- 10)" 
+                                value={keyUpdateValue} 
+                                onChange={(e) => handleNumberInput(e, setKeyUpdateValue)} 
+                                disabled={isAnimating || !selectedId} 
+                                className="flex-1 px-3 py-2 rounded-md border border-slate-300 text-black outline-none focus:ring-2 focus:ring-indigo-500 w-full disabled:bg-slate-100 disabled:text-slate-400 placeholder:text-slate-400 placeholder:text-[10px]" 
+                                maxLength={5}
+                            />
+                            <button 
+                                onClick={() => handleKeyUpdate('DECREASE')} 
+                                disabled={!selectedId || isAnimating} 
+                                className="px-3 bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 rounded-md text-xs font-bold shadow-sm flex items-center"
+                                title="Decrease Key (Auto -10 if empty)"
+                            >
+                                <ArrowDown size={14} className="mr-1"/> Dec
+                            </button>
+                            <button 
+                                onClick={() => handleKeyUpdate('INCREASE')} 
+                                disabled={!selectedId || isAnimating} 
+                                className="px-3 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 rounded-md text-xs font-bold shadow-sm flex items-center"
+                                title="Increase Key (Auto +10 if empty)"
+                            >
+                                <ArrowUp size={14} className="mr-1"/> Inc
+                            </button>
+                        </div>
+                        {!selectedId && <p className="text-[10px] text-slate-400 mt-1 italic text-center">* Select a node first</p>}
                     </div>
+
                     <div className="h-px bg-slate-100 w-full"></div>
+                    
+                    {/* TRAVERSALS */}
                     <div>
                         <div className="flex items-center gap-2 mb-2 text-slate-500"><Layers size={16} /> <span className="text-xs font-bold uppercase tracking-wider">Traversal</span></div>
                         <div className="grid grid-cols-3 gap-2">
-                            <button onClick={() => runSearchAnimation('PRE')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">Pre</button>
-                            <button onClick={() => runSearchAnimation('IN')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">In</button>
-                            <button onClick={() => runSearchAnimation('POST')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">Post</button>
+                            <button onClick={() => runTraversal('PRE')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">Pre</button>
+                            <button onClick={() => runTraversal('IN')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">In</button>
+                            <button onClick={() => runTraversal('POST')} disabled={heap.length === 0 || isAnimating} className="py-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-md text-xs font-bold disabled:opacity-50">Post</button>
                         </div>
                     </div>
                 </motion.div>
             )}
           </AnimatePresence>
-          <button onClick={() => setMenuOpen(!menuOpen)} className={`h-14 w-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 border ${menuOpen ? 'bg-white text-slate-600 border-slate-200 rotate-90' : 'bg-indigo-600 text-white border-indigo-700 hover:scale-110 hover:bg-indigo-700'}`}>{menuOpen ? <X size={24} /> : <Search size={24} />}</button>
+          <button onClick={() => setMenuOpen(!menuOpen)} className={`h-14 w-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 border ${menuOpen ? 'bg-white text-slate-600 border-slate-200 rotate-90' : 'bg-indigo-600 text-white border-indigo-700 hover:scale-110 hover:bg-indigo-700'}`}>{menuOpen ? <X size={24} /> : <KeyRound size={24} />}</button>
       </div>
 
       {/* --- Node Stats --- */}
