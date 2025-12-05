@@ -586,7 +586,7 @@ export default function HeapTreeSimulator() {
             <button onClick={handleInsert} disabled={!newValue || isAnimating} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-bold shadow-sm transition"><Plus size={16}/></button>
             <div className="w-px h-8 bg-slate-300 mx-1"></div>
             <button onClick={handleDeleteRoot} disabled={heap.length === 0 || isAnimating} className="bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 px-3 py-2 rounded-md text-sm font-bold shadow-sm transition flex items-center gap-1">
-                <Trash2 size={16}/> Extract Root
+                <Trash2 size={16}/>  Extract {heapType === 'MAX' ? 'Max' : 'Min'}
             </button>
             <button onClick={() => { setHeap([]); setSelectedId(null); setTransform({x:0, y:0, scale:1}) }} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><RefreshCw size={18}/></button>
           </div>
