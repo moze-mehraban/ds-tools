@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trash2, Plus, RefreshCw, ArrowLeft, 
   Activity, Layers, AlertCircle, Gauge,
-  ZoomIn, ZoomOut, Maximize, GitMerge, ChevronDown, ChevronUp, Network
+  ZoomIn, ZoomOut, Maximize, GitMerge, ChevronDown, ChevronUp, Network,
+  Play
 } from 'lucide-react';
 
 // --- Types ---
@@ -535,7 +536,7 @@ export default function BinomialHeapSimulator() {
                                             initial={{ opacity: 0, y: node.y - 80 }}
                                             animate={{ opacity: 1, x: node.x, y: node.y - 45 }}
                                             exit={{ opacity: 0 }}
-                                            className="absolute -ml-6 w-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest"
+                                            className="absolute -ml-6 w-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest z-30" // Increased z-index
                                         >
                                             Order {node.order}
                                         </motion.div>
