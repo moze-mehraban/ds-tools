@@ -533,8 +533,8 @@ export default function BinomialHeapSimulator() {
                                     {/* Order Label for Roots */}
                                     {node.isRoot && (
                                         <motion.div
-                                            initial={{ opacity: 0, y: node.y - 80 }}
-                                            animate={{ opacity: 1, x: node.x, y: node.y - 45 }}
+                                            initial={{ opacity: 0, y: node.y - 100 }}
+                                            animate={{ opacity: 1, x: node.x, y: node.y - 65 }}
                                             exit={{ opacity: 0 }}
                                             className="absolute -ml-6 w-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest z-30" // Increased z-index
                                         >
