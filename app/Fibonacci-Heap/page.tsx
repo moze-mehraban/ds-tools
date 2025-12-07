@@ -6,8 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trash2, Plus, RefreshCw, ArrowLeft, 
   Activity, Layers, AlertCircle, Gauge,
-  ZoomIn, ZoomOut, Maximize, GitMerge, ChevronDown, ChevronUp, Network, Scissors,
-  Play
+  ZoomIn, ZoomOut, Maximize, GitMerge, ChevronDown, ChevronUp, Network, Scissors, ArrowDown, Play
 } from 'lucide-react';
 
 // --- Types ---
@@ -18,8 +17,7 @@ interface FibNode {
   degree: number;
   marked: boolean;
   children: FibNode[]; // Simulating child pointer list
-  // In a real implementation, we use left/right/parent pointers. 
-  // For React state, a recursive structure is easier to manage and render.
+  parent?: FibNode | null; // Added parent reference for Decrease Key logic
 }
 
 // Visual Types
@@ -59,26 +57,92 @@ const createNode = (value: number): FibNode => ({
     value,
     degree: 0,
     marked: false,
-    children: []
+    children: [],
+    parent: null
 });
 
-// Deep Clone
+// Deep Clone (Modified to rebuild parent pointers)
 const cloneHeap = (heap: FibNode[]): FibNode[] => {
-    const cloneNode = (node: FibNode): FibNode => ({
-        ...node,
-        children: node.children.map(cloneNode)
-    });
-    return heap.map(cloneNode);
+    // Helper that returns cloned node and sets up parent pointers
+    const cloneNode = (node: FibNode, parent: FibNode | null): FibNode => {
+        const newNode: FibNode = {
+            ...node,
+            parent: parent, // Set new parent reference
+            children: []    // Will fill
+        };
+        newNode.children = node.children.map(c => cloneNode(c, newNode));
+        return newNode;
+    };
+    return heap.map(n => cloneNode(n, null)); // Roots have null parent
 };
 
 // Link two trees (y becomes child of x)
 const link = (y: FibNode, x: FibNode) => {
-    // Remove y from root list is implicit because we pass specific trees to link
-    // Make y a child of x
     x.children.push(y);
+    y.parent = x;
     x.degree++;
-    y.marked = false; // Unmark y
+    y.marked = false;
 }
+
+// Cut a node from its parent and add to root list
+const cut = (heap: FibNode[], x: FibNode, y: FibNode): FibNode[] => {
+    // Remove x from y's children
+    y.children = y.children.filter(child => child.id !== x.id);
+    y.degree--;
+    
+    // Add x to root list
+    x.parent = null;
+    x.marked = false;
+    return [...heap, x];
+};
+
+// Cascading Cut
+const cascadingCut = (heap: FibNode[], y: FibNode): FibNode[] => {
+    let currentHeap = heap;
+    const z = y.parent;
+    if (z) {
+        if (!y.marked) {
+            y.marked = true;
+        } else {
+            currentHeap = cut(currentHeap, y, z);
+            currentHeap = cascadingCut(currentHeap, z);
+        }
+    }
+    return currentHeap;
+};
+
+// Decrease Key
+const decreaseKey = (heap: FibNode[], nodeId: string, delta: number): { newHeap: FibNode[], msg: string } => {
+    // 1. Find Node (Recursive Search with Return)
+    const findNode = (nodes: FibNode[]): FibNode | null => {
+        for (const node of nodes) {
+            if (node.id === nodeId) return node;
+            const found = findNode(node.children);
+            if (found) return found;
+        }
+        return null;
+    };
+
+    const targetNode = findNode(heap);
+
+    if (!targetNode) return { newHeap: heap, msg: 'Node not found' };
+
+    // 2. Decrease Value
+    targetNode.value -= delta;
+    const parent = targetNode.parent;
+
+    let currentHeap = heap;
+
+    // 3. Check Heap Property
+    if (parent && targetNode.value < parent.value) {
+        currentHeap = cut(currentHeap, targetNode, parent);
+        currentHeap = cascadingCut(currentHeap, parent);
+        return { newHeap: currentHeap, msg: `Decreased to ${targetNode.value} (Cut & Cascade)` };
+    }
+
+    // 4. Update Min (Scan roots)
+    return { newHeap: currentHeap, msg: `Decreased to ${targetNode.value}` };
+};
 
 // Insert: Add to root list
 const insert = (heap: FibNode[], value: number): { newHeap: FibNode[], minNode: FibNode | null } => {
@@ -96,15 +160,7 @@ const insert = (heap: FibNode[], value: number): { newHeap: FibNode[], minNode: 
 
 // Consolidate (The heavy lifting)
 const consolidate = (heap: FibNode[]): FibNode[] => {
-    // We need an array to store trees by degree
-    // The size roughly log(N). Let's use a map or sparse array.
     const A: (FibNode | null)[] = []; 
-
-    // Iterate through root list
-    // Important: We must iterate a copy or handle the dynamic nature carefully
-    // The standard algo iterates the list. Merging removes from list.
-    
-    // In our state-based approach, 'heap' is the root list.
     let rootList = [...heap];
     
     rootList.forEach(w => {
@@ -112,23 +168,17 @@ const consolidate = (heap: FibNode[]): FibNode[] => {
         let d = x.degree;
         
         while (A[d] != null) {
-            let y = A[d]!; // Another tree with same degree
-            
-            // Make sure x is the smaller root
+            let y = A[d]!; 
             if (x.value > y.value) {
                 [x, y] = [y, x];
             }
-            
-            // Link y to x
             link(y, x);
-            
             A[d] = null;
             d++;
         }
         A[d] = x;
     });
 
-    // Reconstruct root list from A
     return A.filter(n => n !== null && n !== undefined) as FibNode[];
 };
 
@@ -146,29 +196,25 @@ const extractMin = (heap: FibNode[]): { newHeap: FibNode[], minVal: number | nul
     });
 
     const minVal = minNode.value;
-
-    // Remove min from root list
-    // Add its children to root list
-    // (Children parent pointers would be reset here in real impl)
-    
     const children = minNode.children;
+    // Children become roots, so parent = null
+    children.forEach(c => c.parent = null);
+
     let newRootList = [
         ...heap.slice(0, minIndex),
         ...heap.slice(minIndex + 1),
-        ...children // Dump children into root list
+        ...children 
     ];
 
     if (newRootList.length === 0) {
         return { newHeap: [], minVal };
     }
 
-    // Consolidate
     const consolidatedHeap = consolidate(newRootList);
-
     return { newHeap: consolidatedHeap, minVal };
 };
 
-// --- VISUALIZATION LAYOUT (Similar to Binomial but handles marking) ---
+// --- VISUALIZATION LAYOUT ---
 
 const nodeToVisualData = (node: FibNode): VisualNodeData => ({
     id: node.id,
@@ -207,7 +253,7 @@ const calculateLayout = (
         n: VisualNodeData, 
         x: number, 
         y: number, 
-        realNode: FibNode, // Pass real node to access properties like 'marked'
+        realNode: FibNode, 
         isRoot: boolean,
         minVal: number
     ) => {
@@ -219,7 +265,6 @@ const calculateLayout = (
             let childX = x;
             const childCenters: number[] = [];
             n.children.forEach((c, i) => {
-                // Find corresponding real child node
                 const realChild = realNode.children[i];
                 childCenters.push(assign(c, childX, y + Y_GAP, realChild, false, minVal));
                 childX += c.width;
@@ -274,7 +319,9 @@ export default function FibonacciHeapSimulator() {
   // UI State
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newValue, setNewValue] = useState('');
+  const [decreaseValue, setDecreaseValue] = useState('');
   const [statsOpen, setStatsOpen] = useState(true);
+  const [decreaseMenuOpen, setDecreaseMenuOpen] = useState(false);
   
   // Viewport
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -319,6 +366,21 @@ export default function FibonacciHeapSimulator() {
       showToast('neutral', `Extracted Min: ${minVal}`);
   };
 
+  const handleDecreaseKey = () => {
+      if (!selectedId || !decreaseValue) return;
+      const delta = parseInt(decreaseValue);
+      if (isNaN(delta) || delta <= 0) {
+          showToast('error', 'Enter a positive amount to subtract');
+          return;
+      }
+
+      const cloned = cloneHeap(heap);
+      const { newHeap, msg } = decreaseKey(cloned, selectedId, delta);
+      setHeap(newHeap);
+      setDecreaseValue('');
+      showToast('neutral', msg);
+  };
+
   const handleClear = () => {
       setHeap([]);
       setSelectedId(null);
@@ -326,9 +388,9 @@ export default function FibonacciHeapSimulator() {
   }
 
   // --- Handlers ---
-  const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
     const val = e.target.value;
-    if (val === '' || /^-?\d*$/.test(val)) setNewValue(val);
+    if (val === '' || /^-?\d*$/.test(val)) setter(val);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -365,7 +427,7 @@ export default function FibonacciHeapSimulator() {
           </div>
 
           <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200">
-            <input type="text" placeholder="Num" value={newValue} onChange={handleNumberInput} onKeyDown={e => e.key === 'Enter' && handleInsert()} className="px-3 py-2 rounded-md border border-slate-300 w-20 outline-none text-black" maxLength={5}/>
+            <input type="text" placeholder="Num" value={newValue} onChange={(e) => handleNumberInput(e, setNewValue)} onKeyDown={e => e.key === 'Enter' && handleInsert()} className="px-3 py-2 rounded-md border border-slate-300 w-20 outline-none text-black" maxLength={5}/>
             <button onClick={handleInsert} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-bold shadow-sm transition"><Plus size={16}/></button>
             <div className="w-px h-8 bg-slate-300 mx-1"></div>
             <button onClick={handleExtractMin} disabled={rootCount === 0} className="bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 px-3 py-2 rounded-md text-sm font-bold shadow-sm transition flex items-center gap-1">
@@ -424,8 +486,7 @@ export default function FibonacciHeapSimulator() {
                             }
 
                             if (node.marked) {
-                                // Marked nodes (lost a child) get special visual cue
-                                bg += ' border-dashed border-4 border-slate-600'; // Dashed border for marked
+                                bg += ' border-dashed border-4 border-slate-600'; 
                             }
 
                             if (node.isSelected) {
@@ -436,7 +497,6 @@ export default function FibonacciHeapSimulator() {
 
                             return (
                                 <React.Fragment key={node.id}>
-                                    {/* Degree Label for Roots */}
                                     {node.isRoot && (
                                         <motion.div
                                             initial={{ opacity: 0, y: node.y - 80 }}
@@ -448,7 +508,6 @@ export default function FibonacciHeapSimulator() {
                                         </motion.div>
                                     )}
                                     
-                                    {/* Mark Indicator (Scissors icon if marked) */}
                                     {node.marked && (
                                         <motion.div
                                             initial={{ opacity: 0 }}
@@ -486,6 +545,45 @@ export default function FibonacciHeapSimulator() {
          <button onClick={() => setTransform(p => ({...p, scale: Math.max(0.1, p.scale - 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600"><ZoomOut size={20} /></button>
          <button onClick={() => setTransform({x:0, y:0, scale:1})} className="p-2 hover:bg-slate-100 rounded text-slate-600"><Maximize size={20} /></button>
          <button onClick={() => setTransform(p => ({...p, scale: Math.min(3, p.scale + 0.2)}))} className="p-2 hover:bg-slate-100 rounded text-slate-600"><ZoomIn size={20} /></button>
+      </div>
+
+      {/* --- Decrease Key Menu (Left) --- */}
+      <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-4">
+          <AnimatePresence>
+            {decreaseMenuOpen && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 20, originY: 1 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                    transition={{ duration: 0.2 }}
+                    className="w-72 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-2xl p-4 flex flex-col gap-4"
+                >
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 text-slate-500"><ArrowDown size={16} /> <span className="text-xs font-bold uppercase tracking-wider">Decrease Key</span></div>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="Amount to subtract" 
+                                value={decreaseValue} 
+                                onChange={(e) => handleNumberInput(e, setDecreaseValue)} 
+                                disabled={!selectedId} 
+                                className="flex-1 px-3 py-2 rounded-md border border-slate-300 text-black outline-none focus:ring-2 focus:ring-indigo-500 w-full disabled:bg-slate-100" 
+                                maxLength={3}
+                            />
+                            <button 
+                                onClick={handleDecreaseKey} 
+                                disabled={!selectedId || !decreaseValue} 
+                                className="px-3 bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-200 rounded-md text-xs font-bold shadow-sm"
+                            >
+                                Decrease
+                            </button>
+                        </div>
+                        {!selectedId && <p className="text-[10px] text-slate-400 mt-1 italic text-center">* Select a node first</p>}
+                    </div>
+                </motion.div>
+            )}
+          </AnimatePresence>
+          <button onClick={() => setDecreaseMenuOpen(!decreaseMenuOpen)} className={`h-14 w-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 border ${decreaseMenuOpen ? 'bg-white text-slate-600 border-slate-200 rotate-90' : 'bg-indigo-600 text-white border-indigo-700 hover:scale-110 hover:bg-indigo-700'}`}>{decreaseMenuOpen ? <ArrowDown size={24} /> : <ArrowDown size={24} />}</button>
       </div>
 
       {/* --- Node Details --- */}
