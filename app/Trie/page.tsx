@@ -115,17 +115,20 @@ const insertRadix = (root: TrieNode, word: string): TrieNode => {
                 return root;
             }
         } else {
-            // Split
+            // Split logic
             const commonPart = child.label.slice(0, commonLen);
             const childSuffix = child.label.slice(commonLen);
             const wordSuffix = remaining.slice(commonLen);
 
+            // Create the new parent node (the prefix)
             const splitNode = createNode(commonPart, false);
             
+            // FIX: Preserve the existing child ID for the suffix node.
+            // This ensures the visual node "moves down" rather than being deleted/recreated.
             const newChildSuffixNode = {
                 ...child,
                 label: childSuffix,
-                id: generateId() 
+                id: child.id // <--- IMPORTANT: KEEP ORIGINAL ID
             }; 
             
             splitNode.children[childSuffix[0]] = newChildSuffixNode;
@@ -399,12 +402,11 @@ export default function TrieVisualizer() {
                     Trie Simulator
                 </h1>
                 
-                {/* MODE SWITCHER (IMPROVED COLORS) */}
+                {/* MODE SWITCHER */}
                 <div 
                     className="relative flex items-center bg-slate-200 rounded-full p-1 cursor-pointer w-48 h-8 shadow-inner select-none overflow-hidden"
                     onClick={() => setTrieMode(trieMode === 'STANDARD' ? 'COMPRESSED' : 'STANDARD')}
                 >
-                    {/* Animated Pill Background */}
                     <motion.div 
                         className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-sm z-0
                             ${trieMode === 'STANDARD' ? 'bg-indigo-600' : 'bg-amber-600'}
@@ -414,7 +416,6 @@ export default function TrieVisualizer() {
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
                     
-                    {/* Labels */}
                     <div className="flex w-full justify-between px-0 relative z-10 h-full items-center">
                         <span className={`w-1/2 text-center text-[10px] font-bold transition-colors duration-200 ${trieMode === 'STANDARD' ? 'text-white' : 'text-slate-500'}`}>STANDARD</span>
                         <span className={`w-1/2 text-center text-[10px] font-bold transition-colors duration-200 ${trieMode === 'COMPRESSED' ? 'text-white' : 'text-slate-500'}`}>COMPRESSED</span>
@@ -466,7 +467,7 @@ export default function TrieVisualizer() {
                                     initial={{ opacity: 0 }} 
                                     animate={{ opacity: 1 }} 
                                     exit={{ opacity: 0 }}
-                                    transition={{ duration: 0.4 }} 
+                                    transition={{ duration: 0.3 }} 
                                 >
                                     <motion.line
                                         initial={false}
@@ -476,7 +477,7 @@ export default function TrieVisualizer() {
                                             x2: 5000 + edge.x2,
                                             y2: 5000 + edge.y2
                                         }}
-                                        transition={{ duration: 0.4, ease: "easeInOut" }}
+                                        transition={{ duration: 0.4, ease: "backOut" }}
                                         stroke="#cbd5e1" strokeWidth="2"
                                     />
                                 </motion.g>
@@ -507,11 +508,17 @@ export default function TrieVisualizer() {
                             return (
                                 <motion.div
                                     key={node.id}
-                                    layout
+                                    // REMOVED 'layout' prop to prevent conflict with absolute X/Y animation
                                     initial={{ scale: 0, opacity: 0, x: node.x, y: node.y - 20 }}
-                                    animate={{ x: node.x, y: node.y, scale, opacity: 1, zIndex }}
+                                    animate={{ 
+                                        x: node.x, 
+                                        y: node.y, 
+                                        scale, 
+                                        opacity: 1, 
+                                        zIndex 
+                                    }}
                                     exit={{ scale: 0, opacity: 0 }}
-                                    transition={{ duration: 0.4, ease: "easeInOut" }}
+                                    transition={{ duration: 0.4, ease: "backOut" }}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     className={`absolute -mt-5 h-10 rounded-full border-2 flex items-center justify-center font-bold font-mono text-sm cursor-default shadow-sm px-3 ${bg}`}
                                     style={{ 
