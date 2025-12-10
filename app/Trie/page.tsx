@@ -11,9 +11,11 @@ import {
 
 // --- Types ---
 
+type TrieMode = 'STANDARD' | 'COMPRESSED';
+
 interface TrieNode {
   id: string;
-  char: string;
+  label: string; // "a" for Standard, "abc" for Compressed
   isEndOfWord: boolean;
   children: { [key: string]: TrieNode };
 }
@@ -21,13 +23,14 @@ interface TrieNode {
 // Visual Types
 interface VisualNode {
   id: string;
-  char: string;
+  label: string;
   x: number;
   y: number;
   isEndOfWord: boolean;
   isSelected: boolean;
   isVisiting: boolean;
   isFound: boolean;
+  width: number;
 }
 
 interface VisualEdge {
@@ -36,7 +39,6 @@ interface VisualEdge {
   y1: number;
   x2: number;
   y2: number;
-  label: string;
 }
 
 // Animation Step
@@ -47,18 +49,17 @@ interface AnimationStep {
     action: 'VISIT' | 'FOUND' | 'ERROR' | 'DONE';
 }
 
-// --- TRIE LOGIC ---
+// --- LOGIC ---
 
-const generateId = () => 'trie-' + Math.random().toString(36).substr(2, 9);
+const generateId = () => 'node-' + Math.random().toString(36).substr(2, 9);
 
-const createNode = (char: string): TrieNode => ({
+const createNode = (label: string, isEndOfWord = false): TrieNode => ({
     id: generateId(),
-    char,
-    isEndOfWord: false,
+    label,
+    isEndOfWord,
     children: {}
 });
 
-// Deep Clone
 const cloneTrie = (node: TrieNode): TrieNode => {
     const newNode: TrieNode = {
         ...node,
@@ -70,8 +71,8 @@ const cloneTrie = (node: TrieNode): TrieNode => {
     return newNode;
 };
 
-// Insert
-const insert = (root: TrieNode, word: string): TrieNode => {
+// --- STANDARD INSERT ---
+const insertStandard = (root: TrieNode, word: string): TrieNode => {
     let curr = root;
     for (const char of word) {
         if (!curr.children[char]) {
@@ -80,117 +81,143 @@ const insert = (root: TrieNode, word: string): TrieNode => {
         curr = curr.children[char];
     }
     curr.isEndOfWord = true;
-    return root; 
+    return root;
 };
 
-// Delete
-const deleteWord = (root: TrieNode, word: string, depth = 0): boolean => {
-    if (depth === word.length) {
-        if (!root.isEndOfWord) return false; 
-        root.isEndOfWord = false;
-        return Object.keys(root.children).length === 0; 
-    }
-
-    const char = word[depth];
-    const node = root.children[char];
-    if (!node) return false;
-
-    const shouldDelete = deleteWord(node, word, depth + 1);
-
-    if (shouldDelete) {
-        delete root.children[char];
-        return Object.keys(root.children).length === 0 && !root.isEndOfWord;
-    }
-
-    return false;
+// --- RADIX (COMPRESSED) INSERT ---
+const getCommonPrefixLen = (s1: string, s2: string): number => {
+    let i = 0;
+    while (i < s1.length && i < s2.length && s1[i] === s2[i]) i++;
+    return i;
 };
 
-// Generate Search Steps
-const generateSearchSteps = (root: TrieNode, word: string, isPrefix = false): AnimationStep[] => {
-    const steps: AnimationStep[] = [];
+const insertRadix = (root: TrieNode, word: string): TrieNode => {
     let curr = root;
-    
-    steps.push({
-        activeIds: [curr.id],
-        foundId: null,
-        description: `Start at Root`,
-        action: 'VISIT'
-    });
+    let remaining = word;
 
-    for (let i = 0; i < word.length; i++) {
-        const char = word[i];
-        if (curr.children[char]) {
-            curr = curr.children[char];
-            steps.push({
-                activeIds: [curr.id],
-                foundId: null,
-                description: `Found '${char}'`,
-                action: 'VISIT'
-            });
+    while (remaining.length > 0) {
+        const firstChar = remaining[0];
+        const child = curr.children[firstChar];
+
+        if (!child) {
+            curr.children[firstChar] = createNode(remaining, true);
+            return root;
+        }
+
+        const commonLen = getCommonPrefixLen(child.label, remaining);
+        
+        if (commonLen === child.label.length) {
+            curr = child;
+            remaining = remaining.slice(commonLen);
+            
+            if (remaining.length === 0) {
+                child.isEndOfWord = true;
+                return root;
+            }
         } else {
-            steps.push({
-                activeIds: [curr.id], 
-                foundId: null,
-                description: `Character '${char}' not found!`,
-                action: 'ERROR'
-            });
-            return steps;
+            // Split
+            const commonPart = child.label.slice(0, commonLen);
+            const childSuffix = child.label.slice(commonLen);
+            const wordSuffix = remaining.slice(commonLen);
+
+            const splitNode = createNode(commonPart, false);
+            
+            const newChildSuffixNode = {
+                ...child,
+                label: childSuffix,
+                id: generateId() 
+            }; 
+            
+            splitNode.children[childSuffix[0]] = newChildSuffixNode;
+            curr.children[firstChar] = splitNode;
+
+            if (wordSuffix.length > 0) {
+                splitNode.children[wordSuffix[0]] = createNode(wordSuffix, true);
+            } else {
+                splitNode.isEndOfWord = true;
+            }
+            return root;
         }
     }
+    return root;
+};
 
-    if (isPrefix || curr.isEndOfWord) {
-        steps.push({
-            activeIds: [curr.id],
-            foundId: curr.id,
-            description: isPrefix ? `Prefix '${word}' exists` : `Word '${word}' found`,
-            action: 'FOUND'
-        });
+// Search Logic
+const generateSearchSteps = (root: TrieNode, word: string, mode: TrieMode): AnimationStep[] => {
+    const steps: AnimationStep[] = [];
+    let curr = root;
+    let remaining = word;
+    
+    steps.push({ activeIds: [curr.id], foundId: null, description: `Start at Root`, action: 'VISIT' });
+
+    while (remaining.length > 0) {
+        const char = remaining[0];
+        const child = curr.children[char];
+        
+        if (!child) {
+            steps.push({ activeIds: [curr.id], foundId: null, description: `No edge for '${char}'`, action: 'ERROR' });
+            return steps;
+        }
+
+        const matchLen = mode === 'STANDARD' ? 1 : getCommonPrefixLen(child.label, remaining);
+        
+        steps.push({ activeIds: [child.id], foundId: null, description: `Checking '${child.label}'`, action: 'VISIT' });
+
+        if (matchLen < child.label.length) {
+             steps.push({ activeIds: [child.id], foundId: null, description: `Mismatch in '${child.label}'`, action: 'ERROR' });
+             return steps;
+        }
+
+        remaining = remaining.slice(child.label.length);
+        curr = child;
+    }
+
+    if (curr.isEndOfWord) {
+        steps.push({ activeIds: [curr.id], foundId: curr.id, description: `Word found`, action: 'FOUND' });
     } else {
-        steps.push({
-            activeIds: [curr.id],
-            foundId: null,
-            description: `Word '${word}' not found (prefix exists)`,
-            action: 'ERROR'
-        });
+        steps.push({ activeIds: [curr.id], foundId: null, description: `Prefix exists (not marked)`, action: 'ERROR' });
     }
 
     return steps;
 };
 
-// --- LAYOUT ENGINE ---
-
+// --- LAYOUT ---
 const calculateLayout = (
     root: TrieNode | null, 
     visitingId: string | null,
-    foundId: string | null
+    foundId: string | null,
+    mode: TrieMode
 ): { nodes: VisualNode[], edges: VisualEdge[] } => {
     if (!root) return { nodes: [], edges: [] };
 
     const nodes: VisualNode[] = [];
     const edges: VisualEdge[] = [];
 
-    const NODE_SIZE = 40;
     const X_GAP = 20; 
     const Y_GAP = 80;
+    const CHAR_WIDTH = 10;
+    const BASE_WIDTH = mode === 'STANDARD' ? 40 : 40; 
 
-    // Recursive helper to calculate subtree widths and positions
     const traverse = (node: TrieNode, startX: number, y: number): { width: number, centerX: number } => {
         const childKeys = Object.keys(node.children).sort();
         
+        const labelLen = node.label.length || 1; 
+        const myNodeWidth = Math.max(BASE_WIDTH, labelLen * CHAR_WIDTH + 20);
+
         if (childKeys.length === 0) {
-            // Leaf
-            const centerX = startX + NODE_SIZE / 2;
+            const centerX = startX + myNodeWidth / 2;
             nodes.push({
                 id: node.id,
-                char: node.char,
+                label: node.label,
                 x: centerX,
                 y,
                 isEndOfWord: node.isEndOfWord,
                 isSelected: false,
                 isVisiting: node.id === visitingId,
-                isFound: node.id === foundId
+                isFound: node.id === foundId,
+                width: myNodeWidth
             });
-            return { width: NODE_SIZE + X_GAP, centerX };
+            return { width: myNodeWidth + X_GAP, centerX };
         }
 
         let currentChildX = startX;
@@ -203,21 +230,22 @@ const calculateLayout = (
             currentChildX += metrics.width;
         });
 
-        const totalWidth = currentChildX - startX;
-        const myCenterX = (childCenters[0].x + childCenters[childCenters.length - 1].x) / 2;
+        const totalChildrenWidth = currentChildX - startX;
+        const childrenCenter = (childCenters[0].x + childCenters[childCenters.length - 1].x) / 2;
+        const myCenterX = childrenCenter;
 
         nodes.push({
             id: node.id,
-            char: node.char,
+            label: node.label,
             x: myCenterX,
             y,
             isEndOfWord: node.isEndOfWord,
             isSelected: false,
             isVisiting: node.id === visitingId,
-            isFound: node.id === foundId
+            isFound: node.id === foundId,
+            width: myNodeWidth
         });
 
-        // Edges
         childKeys.forEach((key, i) => {
             const childNode = node.children[key];
             edges.push({
@@ -225,12 +253,11 @@ const calculateLayout = (
                 x1: myCenterX,
                 y1: y,
                 x2: childCenters[i].x,
-                y2: y + Y_GAP,
-                label: key
+                y2: y + Y_GAP
             });
         });
 
-        return { width: totalWidth + X_GAP, centerX: myCenterX };
+        return { width: Math.max(totalChildrenWidth, myNodeWidth) + X_GAP, centerX: myCenterX };
     };
 
     traverse(root, 0, 50);
@@ -241,29 +268,38 @@ const calculateLayout = (
 export default function TrieVisualizer() {
   const router = useRouter();
   
-  // Data State
+  // State
+  const [words, setWords] = useState<string[]>([]);
   const [root, setRoot] = useState<TrieNode>(createNode('')); 
-  const [wordInput, setWordInput] = useState('');
+  const [trieMode, setTrieMode] = useState<TrieMode>('STANDARD');
   
-  // UI State
+  const [wordInput, setWordInput] = useState('');
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Animation State
+  // Animation
   const [isAnimating, setIsAnimating] = useState(false);
   const [visitingId, setVisitingId] = useState<string | null>(null);
   const [foundId, setFoundId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [statusType, setStatusType] = useState<'neutral' | 'success' | 'error'>('neutral');
 
-  // --- Layout ---
-  const { nodes: visualNodes, edges: visualEdges } = useMemo(() => {
-    return calculateLayout(root, visitingId, foundId);
-  }, [root, visitingId, foundId]);
+  useEffect(() => {
+      let newRoot = createNode('');
+      const insertFn = trieMode === 'STANDARD' ? insertStandard : insertRadix;
+      
+      words.forEach(w => {
+          insertFn(newRoot, w);
+      });
+      setRoot(newRoot);
+  }, [words, trieMode]);
 
-  // --- Actions ---
+  const { nodes: visualNodes, edges: visualEdges } = useMemo(() => {
+    return calculateLayout(root, visitingId, foundId, trieMode);
+  }, [root, visitingId, foundId, trieMode]);
+
   const showToast = (type: 'neutral' | 'success' | 'error', msg: string) => {
       setStatusType(type);
       setStatusMessage(msg);
@@ -273,37 +309,34 @@ export default function TrieVisualizer() {
   const handleInsert = () => {
       if (!wordInput) return;
       if (!/^[a-zA-Z]+$/.test(wordInput)) {
-          showToast('error', 'Only letters allowed');
+          showToast('error', 'Letters only');
+          return;
+      }
+      if (words.includes(wordInput.toLowerCase())) {
+          showToast('error', 'Word already exists');
           return;
       }
 
-      const cloned = cloneTrie(root);
-      insert(cloned, wordInput.toLowerCase());
-      setRoot(cloned);
+      setWords([...words, wordInput.toLowerCase()]);
       setWordInput('');
       showToast('success', `Inserted "${wordInput}"`);
   };
 
   const handleDelete = () => {
       if (!wordInput) return;
-      const cloned = cloneTrie(root);
-      const exists = deleteWord(cloned, wordInput.toLowerCase());
-      
-      if (!exists) {
-          showToast('error', `Word "${wordInput}" not found`);
+      const w = wordInput.toLowerCase();
+      if (!words.includes(w)) {
+          showToast('error', 'Word not found');
           return;
       }
-      
-      setRoot(cloned);
+      setWords(words.filter(word => word !== w));
       setWordInput('');
-      showToast('neutral', `Deleted "${wordInput}"`);
+      showToast('neutral', `Deleted "${w}"`);
   };
 
   const handleSearch = (isPrefix: boolean) => {
       if (!wordInput) return;
-      if (!/^[a-zA-Z]+$/.test(wordInput)) return;
-
-      const steps = generateSearchSteps(root, wordInput.toLowerCase(), isPrefix);
+      const steps = generateSearchSteps(root, wordInput.toLowerCase(), trieMode);
       
       setIsAnimating(true);
       setVisitingId(null);
@@ -316,7 +349,6 @@ export default function TrieVisualizer() {
               setIsAnimating(false);
               return;
           }
-
           const step = steps[i];
           setVisitingId(step.activeIds[0] || null);
           setFoundId(step.foundId);
@@ -331,12 +363,12 @@ export default function TrieVisualizer() {
   };
 
   const handleClear = () => {
-      setRoot(createNode(''));
+      setWords([]);
       setTransform({x:0, y:0, scale:1});
       setWordInput('');
   };
 
-  // --- Handlers ---
+  // Handlers
   const handleWheel = (e: React.WheelEvent) => {
       e.stopPropagation();
       const scaleAdjustment = -e.deltaY * 0.001;
@@ -358,15 +390,40 @@ export default function TrieVisualizer() {
       
       {/* --- Header --- */}
       <header className="bg-white/90 backdrop-blur-sm border-b border-slate-200 p-4 shadow-sm z-50 relative">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+        <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
+          
+          <div className="flex items-center gap-4 w-full lg:w-auto">
             <button onClick={() => router.back()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><ArrowLeft size={20}/></button>
-            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                Trie <span className="text-xs bg-cyan-100 text-cyan-700 px-2 rounded-full border border-cyan-200">Prefix Tree</span>
-            </h1>
+            <div className="flex items-center gap-3">
+                <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    Trie Simulator
+                </h1>
+                
+                {/* MODE SWITCHER (IMPROVED COLORS) */}
+                <div 
+                    className="relative flex items-center bg-slate-200 rounded-full p-1 cursor-pointer w-48 h-8 shadow-inner select-none overflow-hidden"
+                    onClick={() => setTrieMode(trieMode === 'STANDARD' ? 'COMPRESSED' : 'STANDARD')}
+                >
+                    {/* Animated Pill Background */}
+                    <motion.div 
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-sm z-0
+                            ${trieMode === 'STANDARD' ? 'bg-indigo-600' : 'bg-amber-600'}
+                        `}
+                        initial={false}
+                        animate={{ x: trieMode === 'COMPRESSED' ? '100%' : '0%' }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                    
+                    {/* Labels */}
+                    <div className="flex w-full justify-between px-0 relative z-10 h-full items-center">
+                        <span className={`w-1/2 text-center text-[10px] font-bold transition-colors duration-200 ${trieMode === 'STANDARD' ? 'text-white' : 'text-slate-500'}`}>STANDARD</span>
+                        <span className={`w-1/2 text-center text-[10px] font-bold transition-colors duration-200 ${trieMode === 'COMPRESSED' ? 'text-white' : 'text-slate-500'}`}>COMPRESSED</span>
+                    </div>
+                </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200">
+          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200 w-full lg:w-auto">
             <input 
                 type="text" 
                 placeholder="Word" 
@@ -392,8 +449,8 @@ export default function TrieVisualizer() {
         {Object.keys(root.children).length === 0 && (
              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 pointer-events-none">
                 <Type size={48} className="mb-4 text-slate-300" />
-                <p className="font-medium text-lg">Empty Trie</p>
-                <p className="text-sm">Insert words to build the dictionary.</p>
+                <p className="font-medium text-lg">Empty {trieMode === 'COMPRESSED' ? 'Radix' : ''} Trie</p>
+                <p className="text-sm">Insert words to start.</p>
              </div>
         )}
 
@@ -411,7 +468,6 @@ export default function TrieVisualizer() {
                                     exit={{ opacity: 0 }}
                                     transition={{ duration: 0.4 }} 
                                 >
-                                    {/* Animated Line */}
                                     <motion.line
                                         initial={false}
                                         animate={{
@@ -423,22 +479,6 @@ export default function TrieVisualizer() {
                                         transition={{ duration: 0.4, ease: "easeInOut" }}
                                         stroke="#cbd5e1" strokeWidth="2"
                                     />
-                                    {/* Animated Label */}
-                                    <motion.text 
-                                        initial={false}
-                                        animate={{
-                                            x: 5000 + (edge.x1 + edge.x2)/2,
-                                            y: 5000 + (edge.y1 + edge.y2)/2
-                                        }}
-                                        transition={{ duration: 0.4, ease: "easeInOut" }}
-                                        fill="#64748b" 
-                                        fontWeight="bold"
-                                        fontSize="12"
-                                        textAnchor="middle"
-                                        dy="-5"
-                                    >
-                                        {edge.label}
-                                    </motion.text>
                                 </motion.g>
                             ))}
                         </AnimatePresence>
@@ -452,7 +492,7 @@ export default function TrieVisualizer() {
                             let zIndex = 10;
 
                             if (node.isEndOfWord) {
-                                bg = 'bg-slate-800 text-white border-slate-900'; // Filled black for word end
+                                bg = 'bg-slate-800 text-white border-slate-900'; 
                             }
 
                             if (node.isVisiting) {
@@ -467,14 +507,19 @@ export default function TrieVisualizer() {
                             return (
                                 <motion.div
                                     key={node.id}
+                                    layout
                                     initial={{ scale: 0, opacity: 0, x: node.x, y: node.y - 20 }}
                                     animate={{ x: node.x, y: node.y, scale, opacity: 1, zIndex }}
                                     exit={{ scale: 0, opacity: 0 }}
                                     transition={{ duration: 0.4, ease: "easeInOut" }}
                                     onMouseDown={(e) => e.stopPropagation()}
-                                    className={`absolute w-10 h-10 -ml-5 -mt-5 rounded-full border-2 flex items-center justify-center font-bold font-mono text-sm cursor-default shadow-sm ${bg}`}
+                                    className={`absolute -mt-5 h-10 rounded-full border-2 flex items-center justify-center font-bold font-mono text-sm cursor-default shadow-sm px-3 ${bg}`}
+                                    style={{ 
+                                        width: node.width,
+                                        marginLeft: -node.width / 2 
+                                    }}
                                 >
-                                    {node.char || '*'} {/* Root is * */}
+                                    {node.label || '*'} 
                                 </motion.div>
                             );
                         })}
