@@ -80,16 +80,15 @@ const insert = (root: TrieNode, word: string): TrieNode => {
         curr = curr.children[char];
     }
     curr.isEndOfWord = true;
-    return root; // Root reference doesn't change, but structure does. 
-    // Ideally we clone before calling this.
+    return root; 
 };
 
 // Delete
 const deleteWord = (root: TrieNode, word: string, depth = 0): boolean => {
     if (depth === word.length) {
-        if (!root.isEndOfWord) return false; // Word not found
+        if (!root.isEndOfWord) return false; 
         root.isEndOfWord = false;
-        return Object.keys(root.children).length === 0; // If no children, can delete this node
+        return Object.keys(root.children).length === 0; 
     }
 
     const char = word[depth];
@@ -130,7 +129,7 @@ const generateSearchSteps = (root: TrieNode, word: string, isPrefix = false): An
             });
         } else {
             steps.push({
-                activeIds: [curr.id], // Stay on last valid
+                activeIds: [curr.id], 
                 foundId: null,
                 description: `Character '${char}' not found!`,
                 action: 'ERROR'
@@ -174,12 +173,7 @@ const calculateLayout = (
     const X_GAP = 20; 
     const Y_GAP = 80;
 
-    // We need to calculate subtree widths to center parents
-    // Since it's a general tree (map of children), we convert to array for layout
-    
-    // Recursive helper that returns the width of the subtree rooted at 'node'
-    // and populates the nodes/edges arrays.
-    // Returns { width, centerX }
+    // Recursive helper to calculate subtree widths and positions
     const traverse = (node: TrieNode, startX: number, y: number): { width: number, centerX: number } => {
         const childKeys = Object.keys(node.children).sort();
         
@@ -248,7 +242,7 @@ export default function TrieVisualizer() {
   const router = useRouter();
   
   // Data State
-  const [root, setRoot] = useState<TrieNode>(createNode('')); // Empty root
+  const [root, setRoot] = useState<TrieNode>(createNode('')); 
   const [wordInput, setWordInput] = useState('');
   
   // UI State
@@ -278,7 +272,6 @@ export default function TrieVisualizer() {
 
   const handleInsert = () => {
       if (!wordInput) return;
-      // Regex check: letters only
       if (!/^[a-zA-Z]+$/.test(wordInput)) {
           showToast('error', 'Only letters allowed');
           return;
@@ -416,18 +409,28 @@ export default function TrieVisualizer() {
                                     initial={{ opacity: 0 }} 
                                     animate={{ opacity: 1 }} 
                                     exit={{ opacity: 0 }}
-                                    // Match node transition speed for sync
                                     transition={{ duration: 0.4 }} 
                                 >
-                                    <line
-                                        x1={5000 + edge.x1} y1={5000 + edge.y1}
-                                        x2={5000 + edge.x2} y2={5000 + edge.y2}
+                                    {/* Animated Line */}
+                                    <motion.line
+                                        initial={false}
+                                        animate={{
+                                            x1: 5000 + edge.x1,
+                                            y1: 5000 + edge.y1,
+                                            x2: 5000 + edge.x2,
+                                            y2: 5000 + edge.y2
+                                        }}
+                                        transition={{ duration: 0.4, ease: "easeInOut" }}
                                         stroke="#cbd5e1" strokeWidth="2"
                                     />
-                                    {/* Edge Label (Character) */}
-                                    <text 
-                                        x={5000 + (edge.x1 + edge.x2)/2} 
-                                        y={5000 + (edge.y1 + edge.y2)/2} 
+                                    {/* Animated Label */}
+                                    <motion.text 
+                                        initial={false}
+                                        animate={{
+                                            x: 5000 + (edge.x1 + edge.x2)/2,
+                                            y: 5000 + (edge.y1 + edge.y2)/2
+                                        }}
+                                        transition={{ duration: 0.4, ease: "easeInOut" }}
                                         fill="#64748b" 
                                         fontWeight="bold"
                                         fontSize="12"
@@ -435,7 +438,7 @@ export default function TrieVisualizer() {
                                         dy="-5"
                                     >
                                         {edge.label}
-                                    </text>
+                                    </motion.text>
                                 </motion.g>
                             ))}
                         </AnimatePresence>
@@ -464,11 +467,10 @@ export default function TrieVisualizer() {
                             return (
                                 <motion.div
                                     key={node.id}
-                                    layout
                                     initial={{ scale: 0, opacity: 0, x: node.x, y: node.y - 20 }}
                                     animate={{ x: node.x, y: node.y, scale, opacity: 1, zIndex }}
                                     exit={{ scale: 0, opacity: 0 }}
-                                    transition={{ duration: 0.4 }}
+                                    transition={{ duration: 0.4, ease: "easeInOut" }}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     className={`absolute w-10 h-10 -ml-5 -mt-5 rounded-full border-2 flex items-center justify-center font-bold font-mono text-sm cursor-default shadow-sm ${bg}`}
                                 >
