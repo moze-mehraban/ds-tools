@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: "data structure tools",
   description: "Don't just read code—see it in action. The ultimate interactive playground to visualize Data Structures and learn algorithms faster.",
   openGraph: {
-    images: [  'public/og-image.png'  ],
+    images: [  '/og-image.png'  ],
     description: "Don't just read code—see it in action. The ultimate interactive playground to visualize Data Structures and learn algorithms faster."  
   }
 };
