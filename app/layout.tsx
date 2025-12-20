@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Head from "next/head";
 
 // Initialize fonts
 const geistSans = Geist({
@@ -25,12 +26,27 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Use a React Fragment <> to wrap the return statement.
-  // This is a subtle change but can sometimes resolve bundler/runtime
-  // confusion about the root element in certain Next.js versions/setups.
   return (
-    <> 
+    <>
       <html lang="en">
+        <Head>
+          {/* Google Analytics Tag */}
+          <script
+            async
+            src="https://www.googletagmanager.com/gtag/js?id=G-KJ1DXSW7JL"
+          ></script>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+
+                gtag('config', 'G-KJ1DXSW7JL');
+              `,
+            }}
+          ></script>
+        </Head>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
