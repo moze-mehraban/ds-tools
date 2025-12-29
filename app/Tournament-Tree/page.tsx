@@ -310,29 +310,17 @@ export default function TournamentTreeDelete() {
              continue;
         }
 
-        // Case 2: Left is Real, Right is Ghost -> Left Auto Wins
+        // Case 2: Left is Real, Right is Ghost -> Left Auto Wins and promotes
         if (leftNode && !leftNode.isGhost && (!rightNode || rightNode.isGhost)) {
-             nextLevel.push({
-                id: `lvl-${levelCount}-match-${nextLevel.length}`,
-                data: leftNode.data,
-                left: leftNode,
-                right: rightNode || null,
-                sourceId: leftNode.id,
-                isLeaf: false
-             });
+             // Instead of creating a new node, promote the left child directly
+             nextLevel.push(leftNode);
              continue;
         }
 
-        // Case 3: Left is Ghost, Right is Real -> Right Auto Wins
+        // Case 3: Left is Ghost, Right is Real -> Right Auto Wins and promotes
         if ((!leftNode || leftNode.isGhost) && rightNode && !rightNode.isGhost) {
-            nextLevel.push({
-               id: `lvl-${levelCount}-match-${nextLevel.length}`,
-               data: rightNode.data,
-               left: leftNode || null,
-               right: rightNode,
-               sourceId: rightNode.id,
-               isLeaf: false
-            });
+            // Instead of creating a new node, promote the right child directly
+            nextLevel.push(rightNode);
             continue;
         }
 
